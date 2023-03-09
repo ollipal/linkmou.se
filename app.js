@@ -25,13 +25,26 @@ function canvasDraw() {
 }
 canvasDraw();
 
+let hasBeenLocked = false;
+
 canvas.addEventListener("click", async () => {
   if(!document.pointerLockElement) {
     await canvas.requestPointerLock({
       unadjustedMovement: true,
     });
+    hasBeenLocked = true
   }
 });
+
+canvas.addEventListener("mouseover", async () => {
+  if(!document.pointerLockElement && hasBeenLocked) {
+    await canvas.requestPointerLock({
+      unadjustedMovement: true,
+    });
+  }
+});
+
+
 
 // pointer lock event listeners
 
