@@ -17,6 +17,8 @@ https://stackoverflow.com/a/64207815
 
 Remember pre-requisites before install: https://tauri.app/v1/guides/getting-started/prerequisites
 
+- Tauri managed state: https://users.rust-lang.org/t/global-mutable-variables-in-rust/77056/4
+
 - Event system: https://tauri.app/v1/guides/features/events/
 - Autostart plugin: https://github.com/tauri-apps/tauri-plugin-autostart
 tau

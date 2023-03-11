@@ -1,15 +1,25 @@
-import { createSignal } from "solid-js";
+import { createSignal, onMount } from "solid-js";
 import logo from "./assets/logo.svg";
 import { invoke } from "@tauri-apps/api/tauri";
 import "./App.css";
 
 function App() {
-  const [greetMsg, setGreetMsg] = createSignal("");
+  const [initialized, setInitialized] = createSignal(false);
   const [name, setName] = createSignal("");
 
-  async function greet() {
+  onMount(async () => {
+    await invoke("init");
+    setInitialized(true);
+  });
+
+  async function mouse_move_relative(x: Number, y: Number) {
+    if (!initialized) {
+      console.log("Not initialized!")
+      return;
+    }
+
     // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-    setGreetMsg(await invoke("greet", { name: name() }));
+    await invoke("mouse_move_relative", { x, y });
   }
 
   return (
@@ -37,13 +47,13 @@ function App() {
             onChange={(e) => setName(e.currentTarget.value)}
             placeholder="Enter a name..."
           />
-          <button type="button" onClick={() => greet()}>
+          <button type="button" onClick={() => mouse_move_relative(1, 1)}>
             Greet
           </button>
         </div>
       </div>
 
-      <p>{greetMsg}</p>
+      <p>{name()}</p>
     </div>
   );
 }
