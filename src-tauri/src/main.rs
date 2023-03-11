@@ -1,35 +1,30 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-use rdev::{simulate, Button, EventType, Key, SimulateError, display_size};
-use std::{thread, time};
+use device_query::{DeviceQuery, DeviceState, MouseState, Keycode};
+use enigo::*;
+use rdev::{display_size};
 
-fn get_display_size() -> (u64, u64) {
-    let (w, h) = display_size().unwrap();
-    assert!(w > 0);
-    assert!(h > 0);
-    (w, h)
-}
-
-fn send(event_type: &EventType) {
-    let delay = time::Duration::from_millis(20);
-    match simulate(event_type) {
-        Ok(()) => (),
-        Err(SimulateError) => {
-            println!("We could not send {:?}", event_type);
-        }
-    }
-    // Let ths OS catchup (at least MacOS)
-    thread::sleep(delay);
-}
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
 fn greet(name: &str) -> String {
-    send(&EventType::MouseMove { x: 400.0, y: 400.0 });
+    let device_state = DeviceState::new();
+    let mouse: MouseState = device_state.get_mouse();
+    println!("Current Mouse Coordinates: {:?}", mouse.coords);
+    
+    let mut enigo = Enigo::new();
+    //enigo.mouse_move_relative(x, y) available as well
+    enigo.mouse_move_to(mouse.coords.0 + 10, mouse.coords.1 + 10);
+
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
 fn main() {
+    let (w, h) = display_size().unwrap(); // Use enigo main_display_size when it will be available: https://github.com/enigo-rs/enigo/pull/79
+    assert!(w > 0);
+    assert!(h > 0);
+    println!("Width: {} Height: {}", w, h);
+
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![greet])
         .run(tauri::generate_context!())

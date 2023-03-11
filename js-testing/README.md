@@ -7,7 +7,11 @@ https://stackoverflow.com/a/64207815
 
 - Listen keyboard mouse: https://github.com/Narsil/rdev
 - Input simulation: https://github.com/Enigo-rs/Enigo
+- Listen mouse and keyboard: https://github.com/ostrosco/device_query
+- Mouse/keboard move GUI automation: https://github.com/autopilot-rs/autopilot-rs
 - Access clipbord rust side: https://crates.io/crates/copypasta
+
+
 
 # Tauri
 
