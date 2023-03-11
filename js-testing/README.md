@@ -1,3 +1,7 @@
+# Plan
+
+Use pointer lock api on desktop side, when there. TEST IF WORK WHEN SCREEN NOT FOCUSED.
+
 ## JS
 
 - You can call requestPointerLock() directly if the user has accepted a fullscreen request:
