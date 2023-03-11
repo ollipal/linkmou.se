@@ -1,24 +1,33 @@
-import { createSignal, onMount } from "solid-js";
+import { createSignal, onMount, onCleanup } from "solid-js";
 import logo from "./assets/logo.svg";
 import { invoke } from "@tauri-apps/api/tauri";
+import { emit, listen, UnlistenFn } from '@tauri-apps/api/event'
 import "./App.css";
 
 function App() {
   const [initialized, setInitialized] = createSignal(false);
   const [name, setName] = createSignal("");
+  const [unlisten, setUnlisten] = createSignal<UnlistenFn | undefined>(undefined)
 
   onMount(async () => {
     await invoke("init");
     setInitialized(true);
+    const unlisten_events = await listen('system_event', (event) => {
+      console.log(event);
+    })
+    setUnlisten(() => unlisten_events);
+  });
+
+  onCleanup(() => {
+    const u = unlisten();
+    if (u) { u() }
   });
 
   async function mouse_move_relative(x: Number, y: Number) {
     if (!initialized) {
-      console.log("Not initialized!")
+      console.log("Not initialized, cannot move mouse")
       return;
     }
-
-    // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
     await invoke("mouse_move_relative", { x, y });
   }
 
