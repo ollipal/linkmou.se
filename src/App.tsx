@@ -4,6 +4,12 @@ import { invoke } from "@tauri-apps/api/tauri";
 import { emit, listen, UnlistenFn } from '@tauri-apps/api/event'
 import "./App.css";
 
+interface SystemEvent {
+  name: String,
+  x: Number,
+  y: Number,
+}
+
 function App() {
   const [initialized, setInitialized] = createSignal(false);
   const [name, setName] = createSignal("");
@@ -13,7 +19,8 @@ function App() {
     await invoke("init");
     setInitialized(true);
     const unlisten_events = await listen('system_event', (event) => {
-      console.log(event);
+      const payload = event.payload as SystemEvent;
+      console.log(payload.name);
     })
     setUnlisten(() => unlisten_events);
   });

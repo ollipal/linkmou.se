@@ -21,6 +21,7 @@ struct SystemEvent {
     name: String,
     x: u64,
     y: u64,
+    // TODO screen width, height
 }
 
 #[tauri::command]
