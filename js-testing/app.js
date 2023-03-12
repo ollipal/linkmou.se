@@ -74,6 +74,7 @@ const tracker = document.getElementById("tracker");
 
 let animation;
 function updatePosition(e) {
+  console.log(e)
   x += e.movementX;
   y += e.movementY;
   if (x > canvas.width + RADIUS) {
@@ -89,8 +90,10 @@ function updatePosition(e) {
     y = canvas.height + RADIUS;
   }
 
-  x2 += e.movementX;
-  y2 += e.movementY;
+  //x2 += e.movementX;
+  //y2 += e.movementY;
+  x2 = e.movementX;
+  y2 = e.movementY;
   tracker.textContent = `X position: ${x2}, Y position: ${y2}`;
 
   if (x2 > 0) {
