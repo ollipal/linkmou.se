@@ -127,9 +127,10 @@ fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
 async fn main() {
     let _ = create_data_channel().await;
 
+    let open = CustomMenuItem::new("open".to_string(), "Open");
     let quit = CustomMenuItem::new("quit".to_string(), "Quit");
 
-    let tray_menu = SystemTrayMenu::new().add_item(quit);
+    let tray_menu = SystemTrayMenu::new().add_item(open).add_item(quit);
     let tray = SystemTray::new().with_menu(tray_menu);
 
     tauri::Builder::default()
@@ -139,8 +140,14 @@ async fn main() {
             enigo: Default::default(),
         })
         .invoke_handler(tauri::generate_handler![init, mouse_move_relative])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app_handle, event| match event {
+          tauri::RunEvent::ExitRequested { api, .. } => {
+            api.prevent_exit();
+          }
+          _ => {}
+        });
 }
 
 // Datachannel things below...
