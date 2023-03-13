@@ -5,7 +5,7 @@ use rdev::display_size;
 use rdev::EventType::MouseMove;
 use rdev::{listen, Event};
 use serde::Serialize;
-use tauri::{App};
+use tauri::{App,SystemTray, CustomMenuItem, SystemTrayMenu};
 // Use enigo main_display_size when it will be available: https://github.com/enigo-rs/enigo/pull/79
 use std::sync::Mutex;
 use std::thread;
@@ -127,7 +127,13 @@ fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
 async fn main() {
     let _ = create_data_channel().await;
 
+    let quit = CustomMenuItem::new("quit".to_string(), "Quit");
+
+    let tray_menu = SystemTrayMenu::new().add_item(quit);
+    let tray = SystemTray::new().with_menu(tray_menu);
+
     tauri::Builder::default()
+        .system_tray(tray)
         .setup(|app| setup(app))
         .manage(TauriState {
             enigo: Default::default(),
