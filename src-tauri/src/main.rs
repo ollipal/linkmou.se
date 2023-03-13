@@ -123,7 +123,10 @@ fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
     Ok(())
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
+    let _ = create_data_channel().await;
+
     tauri::Builder::default()
         .setup(|app| setup(app))
         .manage(TauriState {
@@ -271,7 +274,9 @@ async fn create_data_channel() -> Result<()> {
     }
 
     // Wait for the answer to be pasted
+    println!("Waiting for paste...");
     let line = signal::must_read_stdin()?;
+    println!("...pasted!");
     let desc_data = signal::decode(line.as_str())?;
     let answer = serde_json::from_str::<RTCSessionDescription>(&desc_data)?;
 
