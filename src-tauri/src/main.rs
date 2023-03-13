@@ -128,21 +128,6 @@ fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
 
 #[tokio::main]
 async fn main() {
-    thread::spawn(move || {
-        let callback = |payload: Payload, mut socket: Socket| match payload {
-            Payload::String(str) => println!("{}", str[1..str.len() - 1].to_string()),
-            Payload::Binary(bin_data) => println!("{:?}", bin_data),
-        };
-
-        let socket = SocketBuilder::new("http://localhost:3001")
-            .on("message", callback)
-            .on("error", |err, _| eprintln!("Error: {:#?}", err))
-            .connect()
-            .expect("Connection failed");
-
-        socket.emit("message", "test").expect("Server unreachable");
-    });
-
     let _ = create_data_channel().await;
 
     let open = CustomMenuItem::new("open".to_string(), "Open");
@@ -300,6 +285,21 @@ async fn create_data_channel() -> Result<()> {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
         println!("{b64}");
+        thread::spawn(move || {
+            let callback = |payload: Payload, mut socket: Socket| match payload {
+                Payload::String(str) => println!("{}", str[1..str.len() - 1].to_string()),
+                Payload::Binary(bin_data) => println!("{:?}", bin_data),
+            };
+    
+            let socket = SocketBuilder::new("http://localhost:3001")
+                .on("message", callback)
+                .on("error", |err, _| eprintln!("Error: {:#?}", err))
+                .connect()
+                .expect("Connection failed");
+    
+            socket.emit("setId", "test").expect("Server unreachable");
+            socket.emit("message", b64).expect("Server unreachable");
+        });
     } else {
         println!("generate local_description failed!");
     }
