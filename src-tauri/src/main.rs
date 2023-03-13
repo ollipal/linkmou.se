@@ -14,6 +14,7 @@ use std::sync::Mutex;
 use std::thread;
 use tauri::Manager; // Required to access app in 'setup'
 use tauri::State;
+use webrtc::ice_transport::ice_credential_type::RTCIceCredentialType;
 
 struct TauriState {
     enigo: Mutex<Enigo>,
@@ -207,10 +208,18 @@ async fn create_data_channel() -> Result<()> {
 
     // Prepare the configuration
     let config = RTCConfiguration {
-        ice_servers: vec![RTCIceServer {
-            urls: vec!["stun:stun.l.google.com:19302".to_owned()],
-            ..Default::default()
-        }],
+        ice_servers: vec![
+            RTCIceServer {
+                urls: vec!["stun:stun.l.google.com:19302".to_owned()],
+                ..Default::default()
+            },
+            /* RTCIceServer {
+                urls: vec!["turn:TODO".to_owned()],
+                username: "TODO".to_owned(),
+                credential: "TODO".to_owned(),
+                credential_type: RTCIceCredentialType::Password,
+            },*/
+        ],
         ..Default::default()
     };
 
@@ -290,13 +299,13 @@ async fn create_data_channel() -> Result<()> {
                 Payload::String(str) => println!("{}", str[1..str.len() - 1].to_string()),
                 Payload::Binary(bin_data) => println!("{:?}", bin_data),
             };
-    
+
             let socket = SocketBuilder::new("http://localhost:3001")
                 .on("message", callback)
                 .on("error", |err, _| eprintln!("Error: {:#?}", err))
                 .connect()
                 .expect("Connection failed");
-    
+
             socket.emit("setId", "test").expect("Server unreachable");
             socket.emit("message", b64).expect("Server unreachable");
         });
