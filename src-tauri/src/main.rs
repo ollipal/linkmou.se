@@ -5,8 +5,11 @@ use rdev::display_size;
 use rdev::EventType::MouseMove;
 use rdev::{listen, Event};
 use serde::Serialize;
-use tauri::{App,SystemTray, CustomMenuItem, SystemTrayMenu};
+use tauri::{App, CustomMenuItem, SystemTray, SystemTrayMenu};
 // Use enigo main_display_size when it will be available: https://github.com/enigo-rs/enigo/pull/79
+use rust_socketio::{Payload, Socket, SocketBuilder};
+use serde_json::json;
+use std::io::*;
 use std::sync::Mutex;
 use std::thread;
 use tauri::Manager; // Required to access app in 'setup'
@@ -125,6 +128,21 @@ fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
 
 #[tokio::main]
 async fn main() {
+    thread::spawn(move || {
+        let callback = |payload: Payload, mut socket: Socket| match payload {
+            Payload::String(str) => println!("{}", str[1..str.len() - 1].to_string()),
+            Payload::Binary(bin_data) => println!("{:?}", bin_data),
+        };
+
+        let socket = SocketBuilder::new("http://localhost:3001")
+            .on("message", callback)
+            .on("error", |err, _| eprintln!("Error: {:#?}", err))
+            .connect()
+            .expect("Connection failed");
+
+        socket.emit("message", "test").expect("Server unreachable");
+    });
+
     let _ = create_data_channel().await;
 
     let open = CustomMenuItem::new("open".to_string(), "Open");
@@ -143,10 +161,10 @@ async fn main() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app_handle, event| match event {
-          tauri::RunEvent::ExitRequested { api, .. } => {
-            api.prevent_exit();
-          }
-          _ => {}
+            tauri::RunEvent::ExitRequested { api, .. } => {
+                api.prevent_exit();
+            }
+            _ => {}
         });
 }
 
@@ -170,7 +188,7 @@ use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 const MESSAGE_SIZE: usize = 1500;
 
 async fn create_data_channel() -> Result<()> {
-   // Everything below is the WebRTC-rs API! Thanks for using it ❤️.
+    // Everything below is the WebRTC-rs API! Thanks for using it ❤️.
 
     // Create a MediaEngine object to configure the supported codec
     let mut m = MediaEngine::default();
