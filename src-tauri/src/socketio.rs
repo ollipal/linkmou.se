@@ -25,7 +25,7 @@ impl SocketIO {
         }
     }
 
-    pub fn connect(&self, id: &str) {
+    pub fn connect(&mut self, id: &str) {
         println!("connecting");
     
         let callback = |payload: Payload, mut socket: Socket| match payload {
@@ -41,14 +41,14 @@ impl SocketIO {
             .expect("Connection failed");
 
         socket.emit("setId", id).expect("Server unreachable");;
-        //self.client = Option::Some(socket);
+        self.client = Option::Some(socket);
     }
     
     pub fn disconnect(&mut self, id: &str) {
         println!("disconnecting")
     }
     
-    pub fn send(&self, recipient: &str, content: &str) {
+    pub fn send(&mut self, recipient: &str, content: &str) {
         println!("sending");
         let msg = json!({
             "recipient": "browser_1234",
@@ -60,7 +60,7 @@ impl SocketIO {
             println!("Ack data: {:#?}", message);
         };
 
-        self.client.as_ref().unwrap().emit_with_ack("message", msg.to_string(), Duration::from_secs(5), ack_callback).expect("Server unreachable");
+        self.client.as_mut().unwrap().emit_with_ack("message", msg.to_string(), Duration::from_secs(5), ack_callback).expect("Server unreachable");
     }
     
 

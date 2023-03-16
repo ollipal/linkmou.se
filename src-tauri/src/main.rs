@@ -299,10 +299,12 @@ async fn create_data_channel() -> Result<()> {
         thread::spawn(move || {
 
 
-            let s = SocketIO::new();
+            let mut s = SocketIO::new();
             s.connect("desktop_1234");
+            thread::sleep(time::Duration::from_millis(500));
+            s.send("browser_1234", "hello from rust");
 
-            thread::sleep(time::Duration::from_millis(10000));
+            
 
             
         });
