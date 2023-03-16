@@ -1,7 +1,9 @@
+// Datachannel things below...
+
+use std::{io::*, time};
+use serde_json::json;
 use anyhow::Result;
 use bytes::Bytes;
-use clap::{AppSettings, Arg, Command};
-use std::io::Write;
 use std::sync::Arc;
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
@@ -14,54 +16,15 @@ use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::math_rand_alpha;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::ice_transport::ice_credential_type::RTCIceCredentialType;
+use std::thread;
+
+mod socketio;
+use crate::datachannel::socketio::SocketIO;
 
 const MESSAGE_SIZE: usize = 1500;
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let mut app = Command::new("data-channels-detach-create")
-        .version("0.1.0")
-        .author("Rain Liu <yliu@webrtc.rs>")
-        .about("An example of Data-Channels-Detach-Create.")
-        .setting(AppSettings::DeriveDisplayOrder)
-        .subcommand_negates_reqs(true)
-        .arg(
-            Arg::new("FULLHELP")
-                .help("Prints more detailed help information")
-                .long("fullhelp"),
-        )
-        .arg(
-            Arg::new("debug")
-                .long("debug")
-                .short('d')
-                .help("Prints debug log information"),
-        );
-
-    let matches = app.clone().get_matches();
-
-    if matches.is_present("FULLHELP") {
-        app.print_long_help().unwrap();
-        std::process::exit(0);
-    }
-
-    let debug = matches.is_present("debug");
-    if debug {
-        env_logger::Builder::new()
-            .format(|buf, record| {
-                writeln!(
-                    buf,
-                    "{}:{} [{}] {} - {}",
-                    record.file().unwrap_or("unknown"),
-                    record.line().unwrap_or(0),
-                    record.level(),
-                    chrono::Local::now().format("%H:%M:%S.%6f"),
-                    record.args()
-                )
-            })
-            .filter(None, log::LevelFilter::Trace)
-            .init();
-    }
-
+pub async fn create_data_channel() -> Result<()> {
     // Everything below is the WebRTC-rs API! Thanks for using it ❤️.
 
     // Create a MediaEngine object to configure the supported codec
@@ -96,10 +59,18 @@ async fn main() -> Result<()> {
 
     // Prepare the configuration
     let config = RTCConfiguration {
-        ice_servers: vec![RTCIceServer {
-            urls: vec!["stun:stun.l.google.com:19302".to_owned()],
-            ..Default::default()
-        }],
+        ice_servers: vec![
+            RTCIceServer {
+                urls: vec!["stun:stun.l.google.com:19302".to_owned()],
+                ..Default::default()
+            },
+            /* RTCIceServer {
+                urls: vec!["turn:TODO".to_owned()],
+                username: "TODO".to_owned(),
+                credential: "TODO".to_owned(),
+                credential_type: RTCIceCredentialType::Password,
+            },*/
+        ],
         ..Default::default()
     };
 
@@ -174,12 +145,24 @@ async fn main() -> Result<()> {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
         println!("{b64}");
+        thread::spawn(move || {
+
+
+            let mut s = SocketIO::new();
+            s.connect("desktop_1234");
+            thread::sleep(time::Duration::from_millis(1000));
+            s.send("browser_1234", "hello from rust");
+            thread::sleep(time::Duration::from_millis(1000));
+            s.disconnect();
+        });
     } else {
         println!("generate local_description failed!");
     }
 
     // Wait for the answer to be pasted
+    println!("Waiting for paste...");
     let line = signal::must_read_stdin()?;
+    println!("...pasted!");
     let desc_data = signal::decode(line.as_str())?;
     let answer = serde_json::from_str::<RTCSessionDescription>(&desc_data)?;
 
