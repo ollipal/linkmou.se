@@ -15,6 +15,7 @@ use std::thread;
 use tauri::Manager; // Required to access app in 'setup'
 use tauri::State;
 use webrtc::ice_transport::ice_credential_type::RTCIceCredentialType;
+use rust_socketio::RawClient;
 
 struct TauriState {
     enigo: Mutex<Enigo>,
@@ -301,13 +302,26 @@ async fn create_data_channel() -> Result<()> {
             };
 
             let socket = SocketBuilder::new("http://localhost:3001")
+            //let socket = SocketBuilder::new("https://browserkvm-backend.onrender.com") // "http://localhost:3001"
                 .on("message", callback)
                 .on("error", |err, _| eprintln!("Error: {:#?}", err))
                 .connect()
                 .expect("Connection failed");
 
-            socket.emit("setId", "test").expect("Server unreachable");
-            socket.emit("message", b64).expect("Server unreachable");
+            socket.emit("setId", "desktop_1234").expect("Server unreachable");
+            //socket.emit("message", b64).expect("Server unreachable");
+
+            let msg = json!({
+                "recipient": "browser_1234",
+                "content": "hello from rust",
+            });
+
+            let ack_callback = |message: Payload, _: RawClient| {
+                println!("Yehaa! My ack got acked?");
+                println!("Ack data: {:#?}", message);
+            };
+
+            socket.emit_with_ack("message", msg.to_string(), Duration::from_secs(5), ack_callback).expect("Server unreachable");
         });
     } else {
         println!("generate local_description failed!");
