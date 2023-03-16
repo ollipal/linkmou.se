@@ -301,12 +301,10 @@ async fn create_data_channel() -> Result<()> {
 
             let mut s = SocketIO::new();
             s.connect("desktop_1234");
-            thread::sleep(time::Duration::from_millis(500));
+            thread::sleep(time::Duration::from_millis(1000));
             s.send("browser_1234", "hello from rust");
-
-            
-
-            
+            thread::sleep(time::Duration::from_millis(1000));
+            s.disconnect();
         });
     } else {
         println!("generate local_description failed!");

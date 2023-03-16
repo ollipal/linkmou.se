@@ -44,15 +44,17 @@ impl SocketIO {
         self.client = Option::Some(socket);
     }
     
-    pub fn disconnect(&mut self, id: &str) {
-        println!("disconnecting")
+    pub fn disconnect(&mut self) {
+        // NOTE: this might not work
+        println!("disconnecting");
+        self.client.as_mut().unwrap().disconnect().expect("Disconnect failed");
     }
     
     pub fn send(&mut self, recipient: &str, content: &str) {
         println!("sending");
         let msg = json!({
-            "recipient": "browser_1234",
-            "content": "hello from rust",
+            "recipient": recipient,
+            "content": content,
         });
 
         let ack_callback = |message: Payload, _: RawClient| {
