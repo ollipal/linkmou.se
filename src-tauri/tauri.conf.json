@@ -39,10 +39,12 @@
     "windows": [
       {
         "fullscreen": false,
-        "resizable": true,
+        "resizable": false,
         "title": "browserkvm",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "center": true,
+        "decorations": true
       }
     ],
     "systemTray": {
