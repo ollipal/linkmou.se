@@ -7,7 +7,7 @@
     "withGlobalTauri": false
   },
   "package": {
-    "productName": "kvmlink",
+    "productName": "browserkvm",
     "version": "0.0.0"
   },
   "tauri": {
@@ -40,7 +40,7 @@
       {
         "fullscreen": false,
         "resizable": true,
-        "title": "kvmlink",
+        "title": "browserkvm",
         "width": 800,
         "height": 600
       }

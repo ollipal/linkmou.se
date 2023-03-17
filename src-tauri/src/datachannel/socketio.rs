@@ -21,11 +21,11 @@ fn make_response_handler(is_done: Sender<bool>) -> impl Fn(Payload, RawClient) {
     }
 }
 
-fn make_response_handler2(is_done: Sender<String>) -> impl Fn(Payload, RawClient) {
+fn make_response_handler2(on_message2: Arc<Mutex<dyn FnMut(String) + Send>>) -> impl Fn(Payload, RawClient) {
     move |payload: Payload, socket: RawClient| {
         match payload {
             Payload::String(str) => {
-                is_done.send(str);
+                on_message2.lock().unwrap()(str);
             },
             _ => ()
         }
@@ -63,23 +63,29 @@ impl SocketIO {
         }; */
         //let on_message_clone= self.on_message.as_mut().unwrap();
     
-        let (is_done, rx) = mpsc::channel();
-        let handler = make_response_handler2(is_done);
+        //let (is_done, rx) = mpsc::channel();
+        let handler = make_response_handler2(on_message2);
 
 
         let socket = SocketBuilder::new("http://localhost:3001")
         //let socket = SocketBuilder::new("https://browserkvm-backend.onrender.com")
             //.on("message", |_payload: Payload, _socket: Socket| on_message_clone("test".to_owned().to_string()))
-            .on("message", handler)
-            .on("error", |err, _| eprintln!("Error: {:#?}", err))
+            .on("open", |_,_| println!("Connected"))
             .connect()
             .expect("Connection failed");
+            
 
-        socket.emit("setId", id).expect("Server unreachable");;
+            /* .on("close", |_,_| println!("Disconnected"))
+            .on("error", |err, _| eprintln!("Error: {:#?}", err))
+            .on("message", handler)
+            .connect()
+            .expect("Connection failed"); */
+
+        socket.emit("setId", id).expect("Server unreachable");
         
         self.client = Option::Some(socket);
 
-        thread::spawn(move || {
+        /* thread::spawn(move || {
             loop {
                 //let mut on_message = self.on_message;
                 println!("Waiting receivede");
@@ -88,7 +94,7 @@ impl SocketIO {
                 on_message2.lock().unwrap()(_is_done.clone().unwrap());
                 //self.on_message;
             }
-        });
+        }); */
     }
     
     pub fn disconnect(&mut self) {
