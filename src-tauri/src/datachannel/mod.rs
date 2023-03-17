@@ -4,7 +4,7 @@ use std::{io::*, time};
 use serde_json::json;
 use anyhow::Result;
 use bytes::Bytes;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
@@ -18,6 +18,9 @@ use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::ice_transport::ice_credential_type::RTCIceCredentialType;
 use std::thread;
+
+use std::sync::mpsc;
+use std::sync::mpsc::Sender;
 
 mod socketio;
 use crate::datachannel::socketio::SocketIO;
@@ -147,12 +150,13 @@ pub async fn create_data_channel() -> Result<()> {
         println!("{b64}");
         thread::spawn(move || {
 
+            let on_message = |message: String| println!("Message received: {}", message);
 
-            let mut s = SocketIO::new();
-            s.connect("desktop_1234");
+            let mut s = SocketIO::new(Arc::new(Mutex::new(on_message)));
+            s.connect("desktop_1234", Arc::new(Mutex::new(on_message)));
             thread::sleep(time::Duration::from_millis(1000));
             s.send("browser_1234", "hello from rust");
-            thread::sleep(time::Duration::from_millis(1000));
+            thread::sleep(time::Duration::from_millis(100000));
             s.disconnect();
         });
     } else {
