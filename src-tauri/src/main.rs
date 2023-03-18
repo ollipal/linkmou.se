@@ -6,15 +6,21 @@ use rdev::EventType::MouseMove;
 use rdev::{listen, Event};
 use serde::Serialize;
 use tauri::{App, CustomMenuItem, SystemTray, SystemTrayMenu};
+
 // Use enigo main_display_size when it will be available: https://github.com/enigo-rs/enigo/pull/79
+
 
 use std::sync::Mutex;
 use std::thread;
 use tauri::Manager; // Required to access app in 'setup'
 use tauri::State;
 
+
 mod datachannel;
 use crate::datachannel::create_data_channel;
+
+mod background_loop;
+use crate::background_loop::start_background_loop;
 
 struct TauriState {
     enigo: Mutex<Enigo>,
@@ -127,9 +133,25 @@ fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
     Ok(())
 }
 
-#[tokio::main]
-async fn main() {
-    let _ = create_data_channel().await;
+fn main() {
+    start_background_loop();
+
+
+    /* let (
+        mut socket,
+        response
+    )= connect(Url::parse(url).unwrap()).expect("Can't connect");
+    println!("Connected to the server");
+    println!("Response HTTP code: {}", response.status());
+    println!("Response contains the following headers:");
+    for (ref header, _value) in response.headers() {
+        println!("* {}", header);
+    }
+ */
+
+
+
+    //let _ = create_data_channel().await;
     println!("DATACHANNEL CREATED ENDED");
 
     let open = CustomMenuItem::new("open".to_string(), "Open");
