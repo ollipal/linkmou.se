@@ -130,6 +130,7 @@ fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
 #[tokio::main]
 async fn main() {
     let _ = create_data_channel().await;
+    println!("DATACHANNEL CREATED ENDED");
 
     let open = CustomMenuItem::new("open".to_string(), "Open");
     let quit = CustomMenuItem::new("quit".to_string(), "Quit");

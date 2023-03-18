@@ -1,7 +1,8 @@
 // Datachannel things below...
 
 use std::{io::*, time};
-use serde_json::json;
+use serde::{Serialize, Deserialize};
+use serde_json::{json, Value};
 use anyhow::Result;
 use bytes::Bytes;
 use std::sync::{Arc, Mutex};
@@ -13,19 +14,25 @@ use webrtc::api::APIBuilder;
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
 use webrtc::peer_connection::configuration::RTCConfiguration;
-use webrtc::peer_connection::math_rand_alpha;
+use webrtc::peer_connection::{math_rand_alpha, RTCPeerConnection};
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::ice_transport::ice_credential_type::RTCIceCredentialType;
 use std::thread;
 
-use std::sync::mpsc;
+use std::sync::mpsc::{self, Receiver};
 use std::sync::mpsc::Sender;
 
 mod socketio;
 use crate::datachannel::socketio::SocketIO;
 
 const MESSAGE_SIZE: usize = 1500;
+
+#[derive(Serialize, Deserialize)]
+struct SocketIOMessage {
+    key: String,
+    value: String,
+}
 
 pub async fn create_data_channel() -> Result<()> {
     // Everything below is the WebRTC-rs API! Thanks for using it ❤️.
@@ -78,7 +85,7 @@ pub async fn create_data_channel() -> Result<()> {
     };
 
     // Create a new RTCPeerConnection
-    let peer_connection = Arc::new(api.new_peer_connection(config).await?);
+    let peer_connection: Arc<RTCPeerConnection> = Arc::new(api.new_peer_connection(config).await?);
 
     // Create a datachannel with label 'data'
     let data_channel = peer_connection.create_data_channel("data", None).await?;
@@ -100,6 +107,54 @@ pub async fn create_data_channel() -> Result<()> {
 
         Box::pin(async {})
     }));
+
+    peer_connection.on_data_channel(Box::new(move |data_channel: Arc<webrtc::data_channel::RTCDataChannel>| {
+        println!("Data channel '{}'-'{}' open.", data_channel.label(), data_channel.id());
+    
+        Box::pin(async move {
+            let raw = match data_channel.detach().await {
+                Ok(raw) => raw,
+                Err(err) => {
+                    println!("data channel detach got err: {err}");
+                    return;
+                }
+            };
+
+            // Handle reading from the data channel
+            let r = Arc::clone(&raw);
+            tokio::spawn(async move {
+                let _ = read_loop(r).await;
+            });
+
+            // Handle writing to the data channel
+            tokio::spawn(async move {
+                let _ = write_loop(raw).await;
+            });
+        })
+    
+    }));
+        /* let d2 = Arc::clone(&d);
+        Box::pin(async move {
+            let raw = match d2.detach().await {
+                Ok(raw) => raw,
+                Err(err) => {
+                    println!("data channel detach got err: {err}");
+                    return;
+                }
+            };
+
+            // Handle reading from the data channel
+            let r = Arc::clone(&raw);
+            tokio::spawn(async move {
+                let _ = read_loop(r).await;
+            });
+
+            // Handle writing to the data channel
+            tokio::spawn(async move {
+                let _ = write_loop(raw).await;
+            });
+        }) */
+    //}));
 
     // Register channel opening handling
     let d = Arc::clone(&data_channel);
@@ -148,33 +203,100 @@ pub async fn create_data_channel() -> Result<()> {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
         println!("{b64}");
+
+        // Create a new runtime for blocking calls
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
         thread::spawn(move || {
+            //let pc_clone = Arc::clone(&peer_connection);
 
-            let on_message = |message: String| println!("Message received: {}", message);
+            let on_message = move |message: String| {
+                //let v: SocketIOMessage = serde_json::from_str(&mes§sage).unwrap();
+                
+                // remove " from start and end
+                let mut chars = message.chars();
+                chars.next();
+                chars.next_back();
 
-            let mut s = SocketIO::new(Arc::new(Mutex::new(on_message)));
+                let mut splitted = chars.as_str().split('|');
+                let key = splitted.next().unwrap();
+                let value = splitted.next().unwrap().to_string();
+                if key == "RTCSessionDescription" {
+                    
+                    println!("Message received 0: {}", value);
+
+                    let desc_data = signal::decode(value.as_str()).unwrap();
+
+                    println!("Message received 1: {}", desc_data);
+
+                    let answer = serde_json::from_str::<RTCSessionDescription>(&desc_data).unwrap();
+
+                    println!("Message received 2: {:?}", answer);
+
+                    // Apply the answer as the remote description
+                    println!("BEFORE");
+                    let result = rt.block_on(async {
+                        peer_connection.set_remote_description(answer).await.unwrap();
+                    
+                        /* tokio::select! {
+                            _ = done_rx.recv() => {
+                                println!("received done signal!");
+                            }
+                            _ = tokio::signal::ctrl_c() => {
+                                println!();
+                            }
+                        }; */
+                    });
+                    println!("AFTER");
+
+                    /* let desc_data = signal::decode(key).unwrap();
+                    println!("{}", desc_data); */
+
+                    /* set_session_description(peer_connection, value.clone().to_string()); */
+                } else {
+                    println!("Other Message received: {}", key);
+                }
+
+                //set_session_description(peer_connection, message);
+                /* if false {
+                    set_session_description(peer_connection);
+                } else {
+                    //println!("else");
+                } */
+            };
+
+            let mut s = SocketIO::new(/* Arc::new(Mutex::new(on_message)) */);
             s.connect("desktop_1234", Arc::new(Mutex::new(on_message)));
             thread::sleep(time::Duration::from_millis(1000));
-            s.send("browser_1234", "hello from rust");
-            thread::sleep(time::Duration::from_millis(100000));
-            s.disconnect();
+        
+            //loop {
+                s.send("browser_1234",  &json!(SocketIOMessage {key: "RTCSessionDescription".to_string(), value: b64.to_string()}).to_string());
+                thread::sleep(time::Duration::from_millis(5000));
+                s.send("browser_1234",  &json!(SocketIOMessage {key: "RTCSessionDescription".to_string(), value: b64.to_string()}).to_string());
+                thread::sleep(time::Duration::from_millis(5000));
+                //s.disconnect();
+            //}
+
         });
     } else {
         println!("generate local_description failed!");
     }
+    Ok(())
+}
 
+/* async fn set_session_description(peer_connection: Arc<RTCPeerConnection>, desc_data: String/* , mut done_rx: Receiver<()> */) -> Result<()> {
     // Wait for the answer to be pasted
-    println!("Waiting for paste...");
-    let line = signal::must_read_stdin()?;
-    println!("...pasted!");
-    let desc_data = signal::decode(line.as_str())?;
+    //println!("Waiting for paste...");
+    //let line = signal::must_read_stdin()?;
+    //println!("...pasted!");
+    //let desc_data = signal::decode(line.as_str())?;
     let answer = serde_json::from_str::<RTCSessionDescription>(&desc_data)?;
 
     // Apply the answer as the remote description
     peer_connection.set_remote_description(answer).await?;
 
     println!("Press ctrl-c to stop");
-    tokio::select! {
+    /* tokio::select! {
         _ = done_rx.recv() => {
             println!("received done signal!");
         }
@@ -183,10 +305,9 @@ pub async fn create_data_channel() -> Result<()> {
         }
     };
 
-    peer_connection.close().await?;
-
+    peer_connection.close().await?; */
     Ok(())
-}
+} */
 
 // read_loop shows how to read from the datachannel directly
 async fn read_loop(d: Arc<webrtc::data::data_channel::DataChannel>) -> Result<()> {

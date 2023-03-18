@@ -42,15 +42,15 @@ enum SocketIOState {
 pub struct SocketIO {
     state: SocketIOState,
     client: Option<Client>,
-    on_message: Arc<Mutex<dyn FnMut(String) + Send>>,
+    /* on_message: Arc<Mutex<dyn FnMut(String) + Send>>, */
 }
 
 impl SocketIO {
-    pub fn new(on_message: Arc<Mutex<dyn FnMut(String) + Send>>) -> SocketIO {
+    pub fn new(/* on_message: Arc<Mutex<dyn FnMut(String) + Send>> */) -> SocketIO {
         SocketIO {
             state: SocketIOState::Disconnected,
             client: Option::None,
-            on_message,
+            /* on_message, */
         }
     }
 
@@ -64,22 +64,18 @@ impl SocketIO {
         //let on_message_clone= self.on_message.as_mut().unwrap();
     
         //let (is_done, rx) = mpsc::channel();
-        let handler = make_response_handler2(on_message2);
+        let handler = make_response_handler2(on_message2.clone());
 
 
         let socket = SocketBuilder::new("http://localhost:3001")
         //let socket = SocketBuilder::new("https://browserkvm-backend.onrender.com")
             //.on("message", |_payload: Payload, _socket: Socket| on_message_clone("test".to_owned().to_string()))
             .on("open", |_,_| println!("Connected"))
-            .connect()
-            .expect("Connection failed");
-            
-
-            /* .on("close", |_,_| println!("Disconnected"))
+            .on("close", |_,_| println!("Disconnected"))
             .on("error", |err, _| eprintln!("Error: {:#?}", err))
             .on("message", handler)
             .connect()
-            .expect("Connection failed"); */
+            .expect("Connection failed");
 
         socket.emit("setId", id).expect("Server unreachable");
         
