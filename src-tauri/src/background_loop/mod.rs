@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde_json::json;
 use tungstenite::stream::MaybeTlsStream;
-use webrtc::{api::{media_engine::MediaEngine, interceptor_registry::register_default_interceptors, APIBuilder}, interceptor::registry::Registry, peer_connection::{configuration::RTCConfiguration, peer_connection_state::RTCPeerConnectionState, math_rand_alpha, sdp::session_description::RTCSessionDescription}, ice_transport::ice_server::RTCIceServer, data::data_channel::{DataChannel, self}, data_channel::{data_channel_message::DataChannelMessage, RTCDataChannel}};
+use webrtc::{api::{media_engine::MediaEngine, interceptor_registry::register_default_interceptors, APIBuilder}, interceptor::registry::Registry, peer_connection::{configuration::RTCConfiguration, peer_connection_state::RTCPeerConnectionState, math_rand_alpha, sdp::session_description::RTCSessionDescription}, ice_transport::{ice_server::RTCIceServer, ice_candidate::RTCIceCandidate}, data::data_channel::{DataChannel, self}, data_channel::{data_channel_message::DataChannelMessage, RTCDataChannel}};
 use std::{net::TcpStream, thread, time::{self, Duration}, cmp, sync::Arc};
 
 use tungstenite::{connect, Message, WebSocket};
@@ -199,6 +199,15 @@ fn connect_datachannel_and_start_background_processing(offer: RTCSessionDescript
 
                 // Sets the LocalDescription, and starts our UDP listeners
                 peer_connection.set_local_description(answer).await?;
+
+
+                peer_connection.on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
+                    println!("on_ice_candidate {:?} TODO USE THIS FOR SOMETHING!", c);
+                    Box::pin(async move {
+                        // https://github.com/webrtc-rs/webrtc/blob/master/examples/examples/offer-answer/answer.rs#L283
+                    })
+                }));
+            
 
                 // Block until ICE Gathering is complete, disabling trickle ICE
                 // we do this because we only can exchange one signaling message

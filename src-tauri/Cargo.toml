@@ -26,8 +26,25 @@ bytes = "1.4.0"
 rust_socketio = "0.4.1"
 tungstenite = {version = "0.18.0", features = ["native-tls"] }
 url = "2.3.1"
+hyper = { version = "0.14", features = ["full"] } # not necessary?
+clap = "3.0" # not necessary?
+lazy_static = "1.4.0" # not necessary?
+env_logger = "0.10.0" # not necessary?
+chrono = "0.4.24" # not necessary?
+log = "0.4.17" # not necessary?
+tokio-util = "0.7.7" # not necessary?
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem
 # DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
+
+[[example]]
+name = "offer"
+path = "cli/offer-answer/offer.rs"
+bench = false
+
+[[example]]
+name = "answer"
+path = "cli/offer-answer/answer.rs"
+bench = false
