@@ -40,8 +40,8 @@ async fn signal_candidate(addr: &str, c: &RTCIceCandidate) -> Result<()> {
     let req = match Request::builder()
         .method(Method::POST)
         .uri(format!("http://{addr}/candidate"))
-        .header("content-type", "application/json; charset=utf-8")
-        .body(Body::from(payload))
+        .header("content-type", "text/plain; charset=utf-8")
+        .body(Body::from(signal::encode(&payload.to_string())))
     {
         Ok(req) => req,
         Err(err) => {
@@ -345,8 +345,8 @@ async fn main() -> Result<()> {
     let req = match Request::builder()
         .method(Method::POST)
         .uri(format!("http://{answer_addr}/sdp"))
-        .header("content-type", "application/json; charset=utf-8")
-        .body(Body::from(payload))
+        .header("content-type", "text/plain; charset=utf-8")
+        .body(Body::from(signal::encode(&payload.to_string())))
     {
         Ok(req) => req,
         Err(err) => panic!("{}", err),
@@ -359,7 +359,7 @@ async fn main() -> Result<()> {
             return Err(err.into());
         }
     };
-    //println!("Response: {}", resp.status());
+    println!("Response: {}", _resp.status());
 
     println!("Press ctrl-c to stop");
     tokio::select! {

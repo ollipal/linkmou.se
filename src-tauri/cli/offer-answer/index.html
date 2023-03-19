@@ -25,45 +25,63 @@
         }
       ]
     })
+
     let dc = pc.createDataChannel('data')
 
-    dc.onopen = () => {
-      setInterval(function() {
-        let el = document.createElement('template')
-        let selectedPair = pc.sctp.transport.iceTransport.getSelectedCandidatePair()
-
-        el.innerHTML = `<div>
-          <ul>
-             <li> <i> Local</i> - ${selectedPair.local.candidate}</li>
-             <li> <i> Remote</i> - ${selectedPair.remote.candidate} </li>
-          </ul>
-        </div>`
-
-        document.getElementById('iceSelectedPairs').appendChild(el.content.firstChild);
-      }, 3000);
-    }
+    dc.onopen = () => console.log('dc has opened')
+    dc.onclose = () => console.log('dc has closed')
 
     dc.onmessage = event => {
       let el = document.createElement('p')
       el.appendChild(document.createTextNode(event.data))
-
       document.getElementById('inboundDataChannelMessages').appendChild(el);
     }
 
     pc.oniceconnectionstatechange = () => {
       let el = document.createElement('p')
       el.appendChild(document.createTextNode(pc.iceConnectionState))
-
       document.getElementById('iceConnectionStates').appendChild(el);
     }
 
+    // TODO is this ok?
+    pc.onnegotiationneeded = (ev) => {
+      console.log("onnegotiationneeded!")
+      pc.createOffer()
+        .then(d => pc.setLocalDescription(d))
+        .catch((e) => {
+          console.log(`onnegotiationneeded error: ${e}`)
+        });
+    }
+
+    pc.onicecandidate = event => {
+      console.log("on ice candidate " + event)
+
+      console.log(JSON.stringify(pc.localDescription))
+
+      fetch(`http://0.0.0.0:60000/candidate`, {
+            method: 'post',
+            headers: {
+              'Accept': 'application/json, text/plain, */*',
+              'Access-Control-Allow-Origin': 'http://0.0.0.0:60000',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(pc.localDescription)
+          })
+
+      /* if (event.candidate === null) {
+        document.getElementById('localSessionDescription').value = btoa(JSON.stringify(pc.localDescription))
+      } */
+    }
+    
+
 
     window.doSignaling = iceRestart => {
+      console.log("creating offer")
       pc.createOffer({iceRestart})
         .then(offer => {
           pc.setLocalDescription(offer)
 
-          return fetch(`/doSignaling`, {
+          return fetch(`/sdp`, {
             method: 'post',
             headers: {
               'Accept': 'application/json, text/plain, */*',
@@ -77,19 +95,9 @@
         .catch(alert)
     }
 
-    window.candidate = () => {
-        fetch(`http://0.0.0.0:60000/candidate`, {
-            method: 'post',
-            headers: {
-              'Accept': 'application/json, text/plain, */*',
-              'Access-Control-Allow-Origin': 'http://0.0.0.0:60000',
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify("offer")
-          })
-    }
 
-    window.candidate()
-    //window.doSignaling(false)
+
+    //window.candidate()
+    window.doSignaling(false)
   </script>
 </html>

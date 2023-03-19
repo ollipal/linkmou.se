@@ -3,6 +3,7 @@ use clap::{AppSettings, Arg, Command};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Client, Method, Request, Response, Server, StatusCode};
 use tokio_util::codec::{BytesCodec, FramedRead};
+use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -107,7 +108,7 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
             println!("remote_handler receive from /candidate");
             let candidate =
                 match std::str::from_utf8(&hyper::body::to_bytes(req.into_body()).await?) {
-                    Ok(s) => s.to_owned(),
+                    Ok(s) => signal::decode(s.to_owned().as_str()).unwrap(),
                     Err(err) => panic!("{}", err),
                 };
 
@@ -131,7 +132,7 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
             //println!("remote_handler receive from /sdp");
             let sdp_str = match std::str::from_utf8(&hyper::body::to_bytes(req.into_body()).await?)
             {
-                Ok(s) => s.to_owned(),
+                Ok(s) => signal::decode(s.to_owned().as_str()).unwrap(),
                 Err(err) => panic!("{}", err),
             };
             let sdp = match serde_json::from_str::<RTCSessionDescription>(&sdp_str) {
@@ -325,6 +326,16 @@ async fn main() -> Result<()> {
             }
         })
     }));
+
+    // THIS IS FROM: https://github.com/webrtc-rs/webrtc/blob/master/examples/examples/ice-restart/ice-restart.rs#L112
+    // Set the handler for ICE connection state
+    // This will notify you when the peer has connected/disconnected
+    peer_connection.on_ice_connection_state_change(Box::new(
+        |connection_state: RTCIceConnectionState| {
+            println!("ICE Connection State has changed: {connection_state}");
+            Box::pin(async {})
+        },
+    ));
 
     println!("Listening on http://{answer_addr}");
     {
