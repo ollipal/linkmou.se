@@ -1,10 +1,10 @@
 use anyhow::Result;
 use serde_json::json;
 use tungstenite::stream::MaybeTlsStream;
-use webrtc::{api::{media_engine::MediaEngine, interceptor_registry::register_default_interceptors, APIBuilder}, interceptor::registry::Registry, peer_connection::{configuration::RTCConfiguration, peer_connection_state::RTCPeerConnectionState, math_rand_alpha}, ice_transport::ice_server::RTCIceServer, data::data_channel::{DataChannel, self}, data_channel::{data_channel_message::DataChannelMessage, RTCDataChannel}};
+use webrtc::{api::{media_engine::MediaEngine, interceptor_registry::register_default_interceptors, APIBuilder}, interceptor::registry::Registry, peer_connection::{configuration::RTCConfiguration, peer_connection_state::RTCPeerConnectionState, math_rand_alpha, sdp::session_description::RTCSessionDescription}, ice_transport::ice_server::RTCIceServer, data::data_channel::{DataChannel, self}, data_channel::{data_channel_message::DataChannelMessage, RTCDataChannel}};
 use std::{net::TcpStream, thread, time::{self, Duration}, cmp, sync::Arc};
 
-use tungstenite::{connect, Message, Error, WebSocket};
+use tungstenite::{connect, Message, WebSocket};
 use url::Url;
 
 const URL: &str = "ws://localhost:3001"; // "wss://browserkvm-backend.onrender.com"
@@ -30,8 +30,16 @@ pub fn start_background_loop () {
                 },
             };
 
+            // Read socket
+            let rtc_session_description : RTCSessionDescription = read_rtc_session_description(socket);
+
             // Connect datachannel and process messages
-            let datachannel_option = connect_datachannel(socket);
+            let rtc_local_description = connect_datachannel_and_start_background_processing(rtc_session_description);
+            
+            // Write socket
+            let send_success = send_rtc_local_description(socket, rtc_local_description);
+            
+            
             /* if let Some(datachannel) = datachannel_option {
                 //process_input();
             } else {
@@ -41,7 +49,7 @@ pub fn start_background_loop () {
     });
 }
 
-fn connect_socket(url: &str) -> Result<WebSocket<MaybeTlsStream<TcpStream>>, Error> {
+fn connect_socket(url: &str) -> Result<WebSocket<MaybeTlsStream<TcpStream>>, tungstenite::Error> {
     let connect_result = connect(Url::parse(URL).unwrap());
     let mut socket = match connect_result {
         Ok(result) => {
@@ -69,58 +77,50 @@ fn connect_socket(url: &str) -> Result<WebSocket<MaybeTlsStream<TcpStream>>, Err
     }
 }
 
-fn connect_datachannel(mut socket: WebSocket<MaybeTlsStream<TcpStream>>) -> Result<Arc<RTCDataChannel>, webrtc::Error> {
-    // Create a MediaEngine object to configure the supported codec
-    let mut m = MediaEngine::default();
-    
-    match m.register_default_codecs() {
-        Ok(_) => (),
-        Err(e) => return Err(e),
-    };
-
-    // Create a InterceptorRegistry. This is the user configurable RTP/RTCP Pipeline.
-    // This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
-    // this is enabled by default. If you are manually managing You MUST create a InterceptorRegistry
-    // for each PeerConnection.
-    let mut registry = Registry::new();
-
-    // Use the default set of Interceptors
-    registry = match register_default_interceptors(registry, &mut m) {
-        Ok(registry) => registry,
-        Err(e) => return Err(e),
-    };
-
-    // Create the API object with the MediaEngine
-    let api = APIBuilder::new()
-        .with_media_engine(m)
-        .with_interceptor_registry(registry)
-        .build();
-
-    // Prepare the configuration
-    let config = RTCConfiguration {
-        ice_servers: vec![RTCIceServer {
-            urls: vec!["stun:stun.l.google.com:19302".to_owned()],
-            ..Default::default()
-        }],
-        ..Default::default()
-    };
-
-    let result: Result<Arc<RTCDataChannel>, webrtc::Error> = tokio::runtime::Builder::new_multi_thread()
+fn connect_datachannel_and_start_background_processing(offer: RTCSessionDescription) -> Result<RTCSessionDescription, webrtc::Error> {
+    tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .unwrap()
         .block_on(async {
-            // Create a new RTCPeerConnection
-            let peer_connection_option = api.new_peer_connection(config).await;
-            let peer_connection = match peer_connection_option {
-                Ok(peer) => Arc::new(peer),
+            // Create a MediaEngine object to configure the supported codec
+            let mut m = MediaEngine::default();
+            // Register default codecs
+            match m.register_default_codecs() {
+                Ok(_) => (),
                 Err(e) => return Err(e),
             };
 
-            // Create a datachannel with label 'data'
-            let data_channel_option = peer_connection.create_data_channel("data", None).await;
-            let data_channel = match data_channel_option {
-                Ok(data_channel) => data_channel,
+            // Create a InterceptorRegistry. This is the user configurable RTP/RTCP Pipeline.
+            // This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
+            // this is enabled by default. If you are manually managing You MUST create a InterceptorRegistry
+            // for each PeerConnection.
+            let mut registry = Registry::new();
+            // Use the default set of Interceptors
+            registry = match register_default_interceptors(registry, &mut m) {
+                Ok(registry) => registry,
+                Err(e) => return Err(e),
+            };
+
+            // Create the API object with the MediaEngine
+            let api = APIBuilder::new()
+                .with_media_engine(m)
+                .with_interceptor_registry(registry)
+                .build();
+
+            // Prepare the configuration
+            let config = RTCConfiguration {
+                ice_servers: vec![RTCIceServer {
+                    urls: vec!["stun:stun.l.google.com:19302".to_owned()],
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+
+            // Create a new RTCPeerConnection
+            let peer_connection_option = api.new_peer_connection(config).await;
+            let peer_connection = match peer_connection_option {
+                Ok(peer_connection) => Arc::new(peer_connection),
                 Err(e) => return Err(e),
             };
 
@@ -142,84 +142,98 @@ fn connect_datachannel(mut socket: WebSocket<MaybeTlsStream<TcpStream>>) -> Resu
                 Box::pin(async {})
             }));
 
-            // Register channel opening handling
-            let d1 = Arc::clone(&data_channel);
-            data_channel.on_open(Box::new(move || {
-                println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", d1.label(), d1.id());
+            // Register data channel creation handling
+            peer_connection
+                .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
+                    let d_label = d.label().to_owned();
+                    let d_id = d.id();
+                    println!("New DataChannel {d_label} {d_id}");
 
-                let d2 = Arc::clone(&d1);
-                Box::pin(async move {
-                    let mut result = Result::<usize>::Ok(0);
-                    while result.is_ok() {
-                        let timeout = tokio::time::sleep(Duration::from_secs(5));
-                        tokio::pin!(timeout);
+                    // Register channel opening handling
+                    Box::pin(async move {
+                        let d2 = Arc::clone(&d);
+                        let d_label2 = d_label.clone();
+                        let d_id2 = d_id;
+                        d.on_open(Box::new(move || {
+                            println!("Data channel '{d_label2}'-'{d_id2}' open. Random messages will now be sent to any connected DataChannels every 5 seconds");
 
-                        tokio::select! {
-                            _ = timeout.as_mut() =>{
-                                let message = math_rand_alpha(15);
-                                println!("Sending '{message}'");
-                                result = d2.send_text(message).await.map_err(Into::into);
-                            }
-                        };
+                            Box::pin(async move {
+                                let mut result = Result::<usize>::Ok(0);
+                                while result.is_ok() {
+                                    let timeout = tokio::time::sleep(Duration::from_secs(5));
+                                    tokio::pin!(timeout);
+
+                                    tokio::select! {
+                                        _ = timeout.as_mut() =>{
+                                            let message = math_rand_alpha(15);
+                                            println!("Sending '{message}'");
+                                            result = d2.send_text(message).await.map_err(Into::into);
+                                        }
+                                    };
+                                }
+                            })
+                        }));
+
+                        // Register text message handling
+                        d.on_message(Box::new(move |msg: DataChannelMessage| {
+                            let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
+                            println!("Message from DataChannel '{d_label}': '{msg_str}'");
+                            Box::pin(async {})
+                        }));
+                    })
+                }));
+
+                // Wait for the offer to be pasted
+                //let line = signal::must_read_stdin()?;
+                //let desc_data = signal::decode(line.as_str())?;
+                //let offer = serde_json::from_str::<RTCSessionDescription>(&desc_data)?;
+
+                // Set the remote SessionDescription
+                peer_connection.set_remote_description(offer).await?;
+
+                // Create an answer
+                let answer = peer_connection.create_answer(None).await?;
+
+                // Create channel that is blocked until ICE Gathering is complete
+                let mut gather_complete = peer_connection.gathering_complete_promise().await;
+
+                // Sets the LocalDescription, and starts our UDP listeners
+                peer_connection.set_local_description(answer).await?;
+
+                // Block until ICE Gathering is complete, disabling trickle ICE
+                // we do this because we only can exchange one signaling message
+                // in a production application you should exchange ICE Candidates via OnICECandidate
+                match gather_complete.recv().await {
+                    None => return Err(webrtc::Error::new("Gathering failed".to_string())),
+                    _ => (),
+                }
+
+
+                // Output the answer in base64 so we can paste it in browser
+                /* if let Some(local_desc) = peer_connection.local_description().await {
+                    let json_str = serde_json::to_string(&local_desc).unwrap(); // Is this safe?
+                    let b64 = signal::encode(&json_str);
+                    println!("{b64}");
+                } else {
+                    println!("generate local_description failed!");
+                }
+
+                println!("Press ctrl-c to stop");
+                tokio::select! {
+                    _ = done_rx.recv() => {
+                        println!("received done signal!");
                     }
-                })
-            }));
-
-            // Register text message handling
-            let d_label = data_channel.label().to_owned();
-            data_channel.on_message(Box::new(move |msg: DataChannelMessage| {
-                let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-                println!("Message from DataChannel '{d_label}': '{msg_str}'");
-                Box::pin(async {})
-            }));
-
-            // Create an offer to send to the browser
-            let offer_option = peer_connection.create_offer(None).await;
-            let offer = match offer_option {
-                Ok(offer) => offer,
-                Err(e) => return Err(e),
-            };
-
-            // Create channel that is blocked until ICE Gathering is complete
-            let mut gather_complete = peer_connection.gathering_complete_promise().await;
-
-            // Sets the LocalDescription, and starts our UDP listeners
-            peer_connection.set_local_description(offer).await?;
-
-            // Block until ICE Gathering is complete, disabling trickle ICE
-            // we do this because we only can exchange one signaling message
-            // in a production application you should exchange ICE Candidates via OnICECandidate
-            let _ = gather_complete.recv().await;
-
-            // Output the answer in base64 so we can paste it in browser
-            if let Some(local_desc) = peer_connection.local_description().await {
-                let json_str = serde_json::to_string(&local_desc).unwrap(); // Not sure if safe
-                let b64 = signal::encode(&json_str);
-                println!("{b64}");
-            } else {
-                println!("generate local_description failed!");
-            }
-
-            return Ok(data_channel);
-
-            /* let msg2 = json!({
-                "recipient": "desktop_1234",
-                "content": "content,"
-            });
-
-            socket.write_message(Message::Text(msg2.to_string())).unwrap();
-            loop {
-                let msg = socket.read_message();
-
-                match msg {
-                    Ok(message) => println!("ws received: {}", message),
-                    Err(error) => {
-                        println!("ws error: {}", error);
-                        break;
-                    },
+                    _ = tokio::signal::ctrl_c() => {
+                        println!();
+                    }
                 };
-                //println!("Received: {}", msg);
-            } */
-        });
-    return result;
-}
+
+                peer_connection.close().await?; */
+
+                match peer_connection.local_description().await {
+                    Some(local_description) => Ok(local_description),
+                    None => Err(webrtc::Error::new("Could not get local_description".to_string())),
+                }
+            }
+        )
+    }
