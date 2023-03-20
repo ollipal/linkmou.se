@@ -117,7 +117,8 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
             println!("remote_handler receive from /candidate");
             let candidate =
                 match std::str::from_utf8(&hyper::body::to_bytes(req.into_body()).await?) {
-                    Ok(s) => signal::decode(s.to_owned().as_str()).unwrap(),
+                    //Ok(s) => signal::decode(s.to_owned().as_str()).unwrap(),
+                    Ok(s) => s.to_owned(),
                     Err(err) => panic!("{}", err),
                 };
 
@@ -141,7 +142,8 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
             //println!("remote_handler receive from /sdp");
             let sdp_str = match std::str::from_utf8(&hyper::body::to_bytes(req.into_body()).await?)
             {
-                Ok(s) => signal::decode(s.to_owned().as_str()).unwrap(),
+                //Ok(s) => signal::decode(s.to_owned().as_str()).unwrap(),
+                Ok(s) => s.to_owned(),
                 Err(err) => panic!("{}", err),
             };
             let sdp = match serde_json::from_str::<RTCSessionDescription>(&sdp_str) {
@@ -242,7 +244,7 @@ fn main () {
                 .build()
                 .unwrap()
                 .block_on(async {
-                    old_main().await.unwrap();
+                    old_main(socket).await.unwrap();
                 });
             
             break;
@@ -279,7 +281,7 @@ fn connect_socket(url: &str) -> Result<WebSocket<MaybeTlsStream<TcpStream>>, tun
     }
 }
 
-async fn old_main() -> Result<()> {
+async fn old_main(socket: WebSocket<MaybeTlsStream<TcpStream>>) -> Result<()> {
     let mut app = Command::new("Answer")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")

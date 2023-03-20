@@ -50,7 +50,8 @@ async fn signal_candidate(addr: &str, c: &RTCIceCandidate) -> Result<()> {
         .method(Method::POST)
         .uri(format!("http://{addr}/candidate"))
         .header("content-type", "text/plain; charset=utf-8")
-        .body(Body::from(signal::encode(&payload.to_string())))
+        //.body(Body::from(signal::encode(&payload.to_string())))
+        .body(Body::from(payload.to_string()))
     {
         Ok(req) => req,
         Err(err) => {
@@ -199,7 +200,7 @@ fn connect_socket(url: &str) -> Result<WebSocket<MaybeTlsStream<TcpStream>>, tun
     // This enables receiving messages
     let set_id_message = json!({
         "operation": "SET_ID",
-        "id": "desktop_1234"
+        "id": "browser_1234"
     });
 
     match socket.write_message(Message::Text(set_id_message.to_string())) {
@@ -414,7 +415,8 @@ async fn old_main() -> Result<()> {
         .method(Method::POST)
         .uri(format!("http://{answer_addr}/sdp"))
         .header("content-type", "text/plain; charset=utf-8")
-        .body(Body::from(signal::encode(&payload.to_string())))
+        //.body(Body::from(signal::encode(&payload.to_string())))
+        .body(Body::from(payload.to_string()))
     {
         Ok(req) => req,
         Err(err) => panic!("{}", err),
