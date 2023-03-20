@@ -58,14 +58,16 @@
 
       console.log(JSON.stringify(pc.localDescription))
 
+      return
+
       fetch(`http://0.0.0.0:60000/candidate`, {
             method: 'post',
             headers: {
               'Accept': 'application/json, text/plain, */*',
               'Access-Control-Allow-Origin': 'http://0.0.0.0:60000',
-              'Content-Type': 'application/json'
+              'Content-Type': 'text/plain'
             },
-            body: JSON.stringify(pc.localDescription)
+            body: btoa(JSON.stringify(pc.localDescription))
           })
 
       /* if (event.candidate === null) {
@@ -85,12 +87,15 @@
             method: 'post',
             headers: {
               'Accept': 'application/json, text/plain, */*',
-              'Content-Type': 'application/json'
+              'Content-Type': 'text/plain'
             },
-            body: JSON.stringify(offer)
+            body: btoa(JSON.stringify(offer))
           })
         })
-        .then(res => res.json())
+        .then(res => {
+          console.log("RES " + res) 
+          return res.json()
+        })
         .then(res => pc.setRemoteDescription(res))
         .catch(alert)
     }

@@ -5,9 +5,10 @@ use hyper::{Body, Client, Method, Request, Response, Server, StatusCode};
 use tokio_util::codec::{BytesCodec, FramedRead};
 use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use std::io::Write;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, TcpStream};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::{thread, time, cmp};
 use tokio::sync::Mutex;
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
@@ -23,6 +24,14 @@ use webrtc::peer_connection::math_rand_alpha;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
+use serde_json::json;
+use tungstenite::{WebSocket, connect, Message};
+use tungstenite::stream::MaybeTlsStream;
+use url::Url;
+
+const URL: &str = "ws://localhost:3001"; // "wss://browserkvm-backend.onrender.com"
+const SLEEP_ADD_MS: u64 = 500;
+const SLEEP_MAX_MS: u64 = 5000;
 
 #[macro_use]
 extern crate lazy_static;
@@ -161,6 +170,8 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
                 Err(err) => panic!("{}", err),
             };
 
+            println!("HERE");
+
             let req = match Request::builder()
                 .method(Method::POST)
                 .uri(format!("http://{addr}/sdp"))
@@ -207,8 +218,68 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main () {
+    //let background_loop_handler = thread::spawn(|| {
+        let mut tries: u64 = 0;
+        loop {
+            // Print reconnections, potentially sleep
+            println!("Trying to connect {}...", tries);
+            thread::sleep(time::Duration::from_millis(cmp::min(tries * SLEEP_ADD_MS, SLEEP_MAX_MS)));
+            tries += 1;
+
+            // Connect socket
+            let socket_result = connect_socket(URL);
+            let socket = match socket_result {
+                Ok(socket) => socket,
+                Err(e) => {
+                    println!("Could not connect socket: {}", e);
+                    continue;
+                },
+            };
+
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async {
+                    old_main().await.unwrap();
+                });
+            
+            break;
+            
+        }
+    //});
+}
+
+fn connect_socket(url: &str) -> Result<WebSocket<MaybeTlsStream<TcpStream>>, tungstenite::Error> {
+    let connect_result = connect(Url::parse(URL).unwrap());
+    let mut socket = match connect_result {
+        Ok(result) => {
+            println!("Connected to the server");
+            println!("Response HTTP code: {}", result.1.status());
+            println!("Response contains the following headers:");
+            for (ref header, _value) in result.1.headers() {
+                println!("* {}", header);
+            };
+            result.0
+        },
+        Err(e) => return Err(e.into()),
+    };
+
+    // Set socket id
+    // This enables receiving messages
+    let set_id_message = json!({
+        "operation": "SET_ID",
+        "id": "desktop_1234"
+    });
+
+    match socket.write_message(Message::Text(set_id_message.to_string())) {
+        Ok(_) => Ok(socket),
+        Err(e) => Err(e.into()),
+    }
+}
+
+async fn old_main() -> Result<()> {
     let mut app = Command::new("Answer")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
