@@ -1,27 +1,27 @@
 // Datachannel things below...
 
-use std::{io::*, time};
-use serde::{Serialize, Deserialize};
-use serde_json::{json, Value};
 use anyhow::Result;
 use bytes::Bytes;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
+use std::thread;
+use std::{io::*, time};
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::setting_engine::SettingEngine;
 use webrtc::api::APIBuilder;
+use webrtc::ice_transport::ice_credential_type::RTCIceCredentialType;
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
 use webrtc::peer_connection::configuration::RTCConfiguration;
-use webrtc::peer_connection::{math_rand_alpha, RTCPeerConnection};
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
-use webrtc::ice_transport::ice_credential_type::RTCIceCredentialType;
-use std::thread;
+use webrtc::peer_connection::{math_rand_alpha, RTCPeerConnection};
 
-use std::sync::mpsc::{self, Receiver};
 use std::sync::mpsc::Sender;
+use std::sync::mpsc::{self, Receiver};
 
 mod socketio;
 use crate::datachannel::socketio::SocketIO;
@@ -108,52 +108,57 @@ pub async fn create_data_channel() -> Result<()> {
         Box::pin(async {})
     }));
 
-    peer_connection.on_data_channel(Box::new(move |data_channel: Arc<webrtc::data_channel::RTCDataChannel>| {
-        println!("Data channel '{}'-'{}' open.", data_channel.label(), data_channel.id());
-    
-        Box::pin(async move {
-            let raw = match data_channel.detach().await {
-                Ok(raw) => raw,
-                Err(err) => {
-                    println!("data channel detach got err: {err}");
-                    return;
-                }
-            };
+    peer_connection.on_data_channel(Box::new(
+        move |data_channel: Arc<webrtc::data_channel::RTCDataChannel>| {
+            println!(
+                "Data channel '{}'-'{}' open.",
+                data_channel.label(),
+                data_channel.id()
+            );
 
-            // Handle reading from the data channel
-            let r = Arc::clone(&raw);
-            tokio::spawn(async move {
-                let _ = read_loop(r).await;
-            });
+            Box::pin(async move {
+                let raw = match data_channel.detach().await {
+                    Ok(raw) => raw,
+                    Err(err) => {
+                        println!("data channel detach got err: {err}");
+                        return;
+                    }
+                };
 
-            // Handle writing to the data channel
-            tokio::spawn(async move {
-                let _ = write_loop(raw).await;
-            });
-        })
-    
-    }));
-        /* let d2 = Arc::clone(&d);
-        Box::pin(async move {
-            let raw = match d2.detach().await {
-                Ok(raw) => raw,
-                Err(err) => {
-                    println!("data channel detach got err: {err}");
-                    return;
-                }
-            };
+                // Handle reading from the data channel
+                let r = Arc::clone(&raw);
+                tokio::spawn(async move {
+                    let _ = read_loop(r).await;
+                });
 
-            // Handle reading from the data channel
-            let r = Arc::clone(&raw);
-            tokio::spawn(async move {
-                let _ = read_loop(r).await;
-            });
+                // Handle writing to the data channel
+                tokio::spawn(async move {
+                    let _ = write_loop(raw).await;
+                });
+            })
+        },
+    ));
+    /* let d2 = Arc::clone(&d);
+    Box::pin(async move {
+        let raw = match d2.detach().await {
+            Ok(raw) => raw,
+            Err(err) => {
+                println!("data channel detach got err: {err}");
+                return;
+            }
+        };
 
-            // Handle writing to the data channel
-            tokio::spawn(async move {
-                let _ = write_loop(raw).await;
-            });
-        }) */
+        // Handle reading from the data channel
+        let r = Arc::clone(&raw);
+        tokio::spawn(async move {
+            let _ = read_loop(r).await;
+        });
+
+        // Handle writing to the data channel
+        tokio::spawn(async move {
+            let _ = write_loop(raw).await;
+        });
+    }) */
     //}));
 
     // Register channel opening handling
@@ -212,7 +217,7 @@ pub async fn create_data_channel() -> Result<()> {
 
             let on_message = move |message: String| {
                 //let v: SocketIOMessage = serde_json::from_str(&mes§sage).unwrap();
-                
+
                 // remove " from start and end
                 let mut chars = message.chars();
                 chars.next();
@@ -222,7 +227,6 @@ pub async fn create_data_channel() -> Result<()> {
                 let key = splitted.next().unwrap();
                 let value = splitted.next().unwrap().to_string();
                 if key == "RTCSessionDescription" {
-                    
                     println!("Message received 0: {}", value);
 
                     let desc_data = signal::decode(value.as_str()).unwrap();
@@ -236,8 +240,11 @@ pub async fn create_data_channel() -> Result<()> {
                     // Apply the answer as the remote description
                     println!("BEFORE");
                     let result = rt.block_on(async {
-                        peer_connection.set_remote_description(answer).await.unwrap();
-                    
+                        peer_connection
+                            .set_remote_description(answer)
+                            .await
+                            .unwrap();
+
                         /* tokio::select! {
                             _ = done_rx.recv() => {
                                 println!("received done signal!");
@@ -268,15 +275,28 @@ pub async fn create_data_channel() -> Result<()> {
             let mut s = SocketIO::new(/* Arc::new(Mutex::new(on_message)) */);
             s.connect("desktop_1234", Arc::new(Mutex::new(on_message)));
             thread::sleep(time::Duration::from_millis(1000));
-        
-            //loop {
-                s.send("browser_1234",  &json!(SocketIOMessage {key: "RTCSessionDescription".to_string(), value: b64.to_string()}).to_string());
-                thread::sleep(time::Duration::from_millis(5000));
-                s.send("browser_1234",  &json!(SocketIOMessage {key: "RTCSessionDescription".to_string(), value: b64.to_string()}).to_string());
-                thread::sleep(time::Duration::from_millis(5000));
-                //s.disconnect();
-            //}
 
+            //loop {
+            s.send(
+                "browser_1234",
+                &json!(SocketIOMessage {
+                    key: "RTCSessionDescription".to_string(),
+                    value: b64.to_string()
+                })
+                .to_string(),
+            );
+            thread::sleep(time::Duration::from_millis(5000));
+            s.send(
+                "browser_1234",
+                &json!(SocketIOMessage {
+                    key: "RTCSessionDescription".to_string(),
+                    value: b64.to_string()
+                })
+                .to_string(),
+            );
+            thread::sleep(time::Duration::from_millis(5000));
+            //s.disconnect();
+            //}
         });
     } else {
         println!("generate local_description failed!");

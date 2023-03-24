@@ -2,14 +2,15 @@ use anyhow::Result;
 use clap::{AppSettings, Arg, Command};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Client, Method, Request, Response, Server, StatusCode};
-use tokio_util::codec::{BytesCodec, FramedRead};
-use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use std::io::Write;
 use std::net::SocketAddr;
+use tokio_util::codec::{BytesCodec, FramedRead};
+use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 //use std::net::{SocketAddr, TcpStream};
+use serde_json::json;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::{thread, time, cmp};
+use std::{cmp, thread, time};
 use tokio::sync::Mutex;
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
@@ -25,23 +26,22 @@ use webrtc::peer_connection::math_rand_alpha;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
-use serde_json::json;
 //use tungstenite::{WebSocket, connect, Message};
 //use tungstenite::stream::MaybeTlsStream;
-use url::Url;
 use std::clone::Clone;
+use url::Url;
 
 use std::error::Error;
 //use tokio::net::{/* TcpStream,  */ToSocketAddrs};
 //use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 //use tungstenite::{handshake::client::Request, Message};
 
+use futures_util::stream::SplitSink;
+use futures_util::{future, pin_mut, SinkExt, StreamExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
-use tungstenite::{Message};
-use futures_util::{future, pin_mut, StreamExt, SinkExt};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use futures_util::stream::SplitSink;
+use tungstenite::Message;
 //use futures_util::stream::SplitStream;
 /* use tokio::net::TcpStream;
 use tokio_tungstenite::MaybeTlsStream;
@@ -51,14 +51,14 @@ use futures_util::StreamExt;
 use futures_util::SinkExt;
 use tungstenite::Error; */
 //use webrtc::data::message;
-use std::sync::mpsc::{Sender, Receiver, channel};
-use tokio::task::{JoinHandle};
+use std::sync::mpsc::{channel, Receiver, Sender};
+use tokio::task::JoinHandle;
 /* use tungstenite::Message; */
 
-
-async fn async_connect_socket(url: &str) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, Box<dyn Error>> {
+async fn async_connect_socket(
+    url: &str,
+) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, Box<dyn Error>> {
     let (mut socket, _) = connect_async(Request::builder().uri(url).body(())?).await?;
-
 
     // Set socket id
     // This enables receiving messages
@@ -67,7 +67,9 @@ async fn async_connect_socket(url: &str) -> Result<WebSocketStream<MaybeTlsStrea
         "id": "desktop_1234"
     });
 
-    socket.send(Message::Text(set_id_message.to_string())).await?;
+    socket
+        .send(Message::Text(set_id_message.to_string()))
+        .await?;
 
     Ok(socket)
 }
@@ -101,8 +103,6 @@ async fn signal_candidate(addr: &str, c: &RTCIceCandidate) -> Result<()> {
         let socketm = SOCKET.lock().await;
         socketm.clone()
     }; */
-
-
 
     let req = match Request::builder()
         .method(Method::POST)
@@ -272,76 +272,87 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
     }
 }
 
-fn main () {
+fn main() {
     //let background_loop_handler = thread::spawn(|| {
-        let mut tries: u64 = 0;
-        loop {
-            // Print reconnections, potentially sleep
-            println!("Trying to connect {}...", tries);
-            thread::sleep(time::Duration::from_millis(cmp::min(tries * SLEEP_ADD_MS, SLEEP_MAX_MS)));
-            tries += 1;
+    let mut tries: u64 = 0;
+    loop {
+        // Print reconnections, potentially sleep
+        println!("Trying to connect {}...", tries);
+        thread::sleep(time::Duration::from_millis(cmp::min(
+            tries * SLEEP_ADD_MS,
+            SLEEP_MAX_MS,
+        )));
+        tries += 1;
 
-            // Connect socket
+        // Connect socket
 
-            tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .unwrap()
-                .block_on(async {
-                    /* {
-                        let mut socketm = SOCKET.lock().await;
-                        *socketm = Some(socket);
-                    } */
-                    old_main().await.unwrap();
-                });
-            
-            break;
-            
-        }
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                /* {
+                    let mut socketm = SOCKET.lock().await;
+                    *socketm = Some(socket);
+                } */
+                old_main().await.unwrap();
+            });
+
+        break;
+    }
     //});
 }
 
-async fn get_socket_write_read_handle(url: &str) -> Result<(SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>, Receiver<String>, JoinHandle<()>), tungstenite::Error> {
+async fn get_socket_write_read_handle(
+    url: &str,
+) -> Result<
+    (
+        SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
+        Receiver<String>,
+        JoinHandle<()>,
+    ),
+    tungstenite::Error,
+> {
     let (receive_sender, receive): (Sender<String>, Receiver<String>) = channel();
-  
+
     let (ws_stream, _) = match connect_async(url).await {
-      Ok(socket) => socket,
-      Err(e) => return Err(e),
+        Ok(socket) => socket,
+        Err(e) => return Err(e),
     };
-    
+
     let (write, mut read) = ws_stream.split();
-    
+
     let handle = tokio::spawn(async move {
-      loop {
-        let message = match read.next().await {
-          Some(result) => match result {
-            Ok(message) => message,
-            Err(e) => {
-              match e {
-                    tungstenite::Error::ConnectionClosed => (),
-                    tungstenite::Error::AlreadyClosed => (),
-                    tungstenite::Error::Protocol(_) => (),
-                  _ => println!("New error while reading message {}", e),
-              }
-              break
-            },
-          },
-          None => {
-            println!("None message?");
-            continue
-          },
-        };
-  
-        println!("We have message");
-        if let Err(e) = receive_sender.send(message.to_string()) {
-          println!("Error while sending receive {}", e);
-          break;
+        loop {
+            let message = match read.next().await {
+                Some(result) => match result {
+                    Ok(message) => message,
+                    Err(e) => {
+                        match e {
+                            tungstenite::Error::ConnectionClosed => (),
+                            tungstenite::Error::AlreadyClosed => (),
+                            tungstenite::Error::Protocol(_) => (),
+                            _ => println!("New error while reading message {}", e),
+                        }
+                        break;
+                    }
+                },
+                None => {
+                    println!("None message?");
+                    continue;
+                }
+            };
+
+            println!("We have message");
+            if let Err(e) = receive_sender.send(message.to_string()) {
+                println!("Error while sending receive {}", e);
+                break;
+            }
         }
-      }
     });
-  
+
     Ok((write, receive, handle))
-  }
+}
 
 async fn old_main() -> Result<()> {
     let mut app = Command::new("Answer")

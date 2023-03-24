@@ -1,8 +1,27 @@
 use anyhow::Result;
 use serde_json::json;
+use std::{
+    cmp,
+    net::TcpStream,
+    sync::Arc,
+    thread,
+    time::{self, Duration},
+};
 use tungstenite::stream::MaybeTlsStream;
-use webrtc::{api::{media_engine::MediaEngine, interceptor_registry::register_default_interceptors, APIBuilder}, interceptor::registry::Registry, peer_connection::{configuration::RTCConfiguration, peer_connection_state::RTCPeerConnectionState, math_rand_alpha, sdp::session_description::RTCSessionDescription}, ice_transport::{ice_server::RTCIceServer, ice_candidate::RTCIceCandidate}, data::data_channel::{DataChannel, self}, data_channel::{data_channel_message::DataChannelMessage, RTCDataChannel}};
-use std::{net::TcpStream, thread, time::{self, Duration}, cmp, sync::Arc};
+use webrtc::{
+    api::{
+        interceptor_registry::register_default_interceptors, media_engine::MediaEngine, APIBuilder,
+    },
+    data::data_channel::{self, DataChannel},
+    data_channel::{data_channel_message::DataChannelMessage, RTCDataChannel},
+    ice_transport::{ice_candidate::RTCIceCandidate, ice_server::RTCIceServer},
+    interceptor::registry::Registry,
+    peer_connection::{
+        configuration::RTCConfiguration, math_rand_alpha,
+        peer_connection_state::RTCPeerConnectionState,
+        sdp::session_description::RTCSessionDescription,
+    },
+};
 
 use tungstenite::{connect, Message, WebSocket};
 use url::Url;
@@ -11,13 +30,16 @@ const URL: &str = "ws://localhost:3001"; // "wss://browserkvm-backend.onrender.c
 const SLEEP_ADD_MS: u64 = 500;
 const SLEEP_MAX_MS: u64 = 5000;
 
-pub fn start_background_loop () {
+pub fn start_background_loop() {
     let background_loop_handler = thread::spawn(|| {
         let mut tries: u64 = 0;
         loop {
             // Print reconnections, potentially sleep
             println!("Trying to connect {}...", tries);
-            thread::sleep(time::Duration::from_millis(cmp::min(tries * SLEEP_ADD_MS, SLEEP_MAX_MS)));
+            thread::sleep(time::Duration::from_millis(cmp::min(
+                tries * SLEEP_ADD_MS,
+                SLEEP_MAX_MS,
+            )));
             tries += 1;
 
             // Connect socket
@@ -27,19 +49,19 @@ pub fn start_background_loop () {
                 Err(e) => {
                     println!("Could not connect socket: {}", e);
                     continue;
-                },
+                }
             };
 
             // Read socket
-            let rtc_session_description : RTCSessionDescription = read_rtc_session_description(socket);
+            //let rtc_session_description : RTCSessionDescription = read_rtc_session_description(socket);
 
             // Connect datachannel and process messages
-            let rtc_local_description = connect_datachannel_and_start_background_processing(rtc_session_description);
-            
+            let rtc_local_description =
+                connect_datachannel_and_start_background_processing(rtc_session_description);
+
             // Write socket
-            let send_success = send_rtc_local_description(socket, rtc_local_description);
-            
-            
+            //let send_success = send_rtc_local_description(socket, rtc_local_description);
+
             /* if let Some(datachannel) = datachannel_option {
                 //process_input();
             } else {
@@ -58,9 +80,9 @@ fn connect_socket(url: &str) -> Result<WebSocket<MaybeTlsStream<TcpStream>>, tun
             println!("Response contains the following headers:");
             for (ref header, _value) in result.1.headers() {
                 println!("* {}", header);
-            };
+            }
             result.0
-        },
+        }
         Err(e) => return Err(e.into()),
     };
 
@@ -77,7 +99,9 @@ fn connect_socket(url: &str) -> Result<WebSocket<MaybeTlsStream<TcpStream>>, tun
     }
 }
 
-fn connect_datachannel_and_start_background_processing(offer: RTCSessionDescription) -> Result<RTCSessionDescription, webrtc::Error> {
+fn connect_datachannel_and_start_background_processing(
+    offer: RTCSessionDescription,
+) -> Result<RTCSessionDescription, webrtc::Error> {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -245,4 +269,4 @@ fn connect_datachannel_and_start_background_processing(offer: RTCSessionDescript
                 }
             }
         )
-    }
+}
