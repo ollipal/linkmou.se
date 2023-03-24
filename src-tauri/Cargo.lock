@@ -443,6 +443,8 @@ dependencies = [
  "clap",
  "enigo",
  "env_logger",
+ "futures-channel",
+ "futures-util",
  "hyper",
  "lazy_static",
  "log",
@@ -454,6 +456,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tokio",
+ "tokio-tungstenite 0.18.0",
  "tokio-util",
  "tungstenite 0.18.0",
  "url",
@@ -3459,7 +3462,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
- "tokio-tungstenite",
+ "tokio-tungstenite 0.17.2",
  "tungstenite 0.17.3",
  "url",
 ]
@@ -4481,6 +4484,18 @@ dependencies = [
  "tokio",
  "tokio-native-tls",
  "tungstenite 0.17.3",
+]
+
+[[package]]
+name = "tokio-tungstenite"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54319c93411147bced34cb5609a80e0a8e44c5999c93903a81cd866630ec0bfd"
+dependencies = [
+ "futures-util",
+ "log",
+ "tokio",
+ "tungstenite 0.18.0",
 ]
 
 [[package]]

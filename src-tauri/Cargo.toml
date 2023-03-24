@@ -33,6 +33,9 @@ env_logger = "0.10.0" # not necessary?
 chrono = "0.4.24" # not necessary?
 log = "0.4.17" # not necessary?
 tokio-util = "0.7.7" # not necessary?
+tokio-tungstenite = "0.18.0"
+futures-util = "0.3.27"
+futures-channel = "0.3.27"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem
@@ -42,6 +45,16 @@ custom-protocol = ["tauri/custom-protocol"]
 [[example]]
 name = "offer"
 path = "cli/offer-answer/offer.rs"
+bench = false
+
+[[example]]
+name = "offer2"
+path = "cli/offer-answer/offer2.rs"
+bench = false
+
+[[example]]
+name = "offer3"
+path = "cli/offer-answer/offer3.rs"
 bench = false
 
 [[example]]

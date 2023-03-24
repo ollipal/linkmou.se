@@ -3,16 +3,15 @@ use clap::{AppSettings, Arg, Command};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Client, Method, Request, Response, Server, StatusCode};
 use serde_json::json;
-use tungstenite::{WebSocket, connect, Message};
-use tungstenite::stream::MaybeTlsStream;
+/* use tungstenite::{WebSocket, connect, Message};
+use tungstenite::stream::MaybeTlsStream; */
 use url::Url;
 use std::io::Write;
-use std::net::{SocketAddr, TcpStream};
+use std::net::{SocketAddr};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::{thread, time, cmp};
 use tokio::sync::Mutex;
-use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
@@ -25,6 +24,22 @@ use webrtc::peer_connection::math_rand_alpha;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
+use tokio::time::{sleep, Duration};
+
+use futures_util::stream::SplitSink;
+use futures_util::SinkExt;
+//use futures_util::stream::SplitStream;
+use tokio::net::TcpStream;
+use tokio_tungstenite::MaybeTlsStream;
+use tokio_tungstenite::WebSocketStream;
+use tokio_tungstenite::connect_async;
+use futures_util::StreamExt;
+/* use futures_util::SinkExt; */
+use tungstenite::Error;
+//use webrtc::data::message;
+use std::sync::mpsc::{Sender, Receiver, channel};
+use tokio::task::{JoinHandle};
+use tungstenite::Message;
 
 const URL: &str = "ws://localhost:3001"; // "wss://browserkvm-backend.onrender.com"
 const SLEEP_ADD_MS: u64 = 500;
@@ -149,65 +164,93 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
     }
 }
 
-fn main () {
+#[tokio::main]
+async fn main () {
     //let background_loop_handler = thread::spawn(|| {
         let mut tries: u64 = 0;
         loop {
             // Print reconnections, potentially sleep
             println!("Trying to connect {}...", tries);
-            thread::sleep(time::Duration::from_millis(cmp::min(tries * SLEEP_ADD_MS, SLEEP_MAX_MS)));
+            sleep(Duration::from_millis(cmp::min(tries * SLEEP_ADD_MS, SLEEP_MAX_MS))).await;
             tries += 1;
 
             // Connect socket
-            let socket_result = connect_socket(URL);
-            let socket = match socket_result {
-                Ok(socket) => socket,
-                Err(e) => {
-                    println!("Could not connect socket: {}", e);
-                    continue;
-                },
+            println!("connecting");
+            let (mut write, receive, handle) = match get_socket_write_read_handle(URL).await {
+            Ok(ok) => ok,
+            Err(_) => continue,
+            };
+            println!("connected");
+            
+            match write.send(tungstenite::Message::Text("test".to_string())).await {
+            Ok(_) => (),
+            Err(_) => {
+                println!("Could not send");
+                continue;
+            }
             };
 
-            tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .unwrap()
-                .block_on(async {
-                    old_main().await.unwrap();
-                });
+            let message = match receive.recv() {
+            Ok(message) => message,
+            Err(_) => {
+                println!("Could not receive");
+                continue;
+            },
+            };
 
+            println!("Received: {}", message);
+
+
+            old_main().await.unwrap();
+
+            handle.await.expect("The read task failed.");
             break;
         }
     //});
 }
 
-fn connect_socket(url: &str) -> Result<WebSocket<MaybeTlsStream<TcpStream>>, tungstenite::Error> {
-    let connect_result = connect(Url::parse(URL).unwrap());
-    let mut socket = match connect_result {
-        Ok(result) => {
-            println!("Connected to the server");
-            println!("Response HTTP code: {}", result.1.status());
-            println!("Response contains the following headers:");
-            for (ref header, _value) in result.1.headers() {
-                println!("* {}", header);
-            };
-            result.0
-        },
-        Err(e) => return Err(e.into()),
+async fn get_socket_write_read_handle(url: &str) -> Result<(SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>, Receiver<String>, JoinHandle<()>), Error> {
+    let (receive_sender, receive): (Sender<String>, Receiver<String>) = channel();
+  
+    let (ws_stream, _) = match connect_async(url).await {
+      Ok(socket) => socket,
+      Err(e) => return Err(e),
     };
-
-    // Set socket id
-    // This enables receiving messages
-    let set_id_message = json!({
-        "operation": "SET_ID",
-        "id": "browser_1234"
+    
+    let (write, mut read) = ws_stream.split();
+    
+    let handle = tokio::spawn(async move {
+      loop {
+        let message = match read.next().await {
+          Some(result) => match result {
+            Ok(message) => message,
+            Err(e) => {
+              match e {
+                  Error::ConnectionClosed => (),
+                  Error::AlreadyClosed => (),
+                  Error::Protocol(_) => (),
+                  _ => println!("New error while reading message {}", e),
+              }
+              break
+            },
+          },
+          None => {
+            println!("None message?");
+            continue
+          },
+        };
+  
+        println!("We have message");
+        if let Err(e) = receive_sender.send(message.to_string()) {
+          println!("Error while sending receive {}", e);
+          break;
+        }
+      }
     });
+  
+    Ok((write, receive, handle))
+  }
 
-    match socket.write_message(Message::Text(set_id_message.to_string())) {
-        Ok(_) => Ok(socket),
-        Err(e) => Err(e.into()),
-    }
-}
 
 async fn old_main() -> Result<()> {
     let mut app = Command::new("Offer")
