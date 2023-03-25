@@ -1,3 +1,6 @@
+use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::task::JoinHandle;
+
 use futures_util::stream::SplitSink;
 use futures_util::stream::SplitStream;
 use futures_util::SinkExt;
@@ -8,16 +11,17 @@ use tokio_tungstenite::MaybeTlsStream;
 use tokio_tungstenite::WebSocketStream;
 use tungstenite::Error;
 use tungstenite::Message;
+use tokio::time::{sleep, Duration};
 
-struct WebSocket {
+pub struct WebSocket {
     write: Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>,
     read: Option<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>,
     connected: bool,
     url: String,
 }
 
-impl WebSocket {
-    fn new(url: &str) -> Self {
+impl<'ws> WebSocket {
+    pub fn new(url: &str) -> Self {
         WebSocket {
             write: None,
             read: None,
@@ -26,7 +30,7 @@ impl WebSocket {
         }
     }
 
-    async fn connect(&mut self) -> Result<(), Error> {
+    pub async fn connect(&mut self) -> Result<(), Error> {
         self.connected = false;
 
         let (ws_stream, _) = match connect_async(self.url.to_string()).await {
@@ -42,7 +46,7 @@ impl WebSocket {
         Ok(())
     }
 
-    async fn recv(&mut self) -> Option<String> {
+    pub async fn recv(&mut self) -> Option<String> {
         let read = match &mut self.read {
             Some(read) => read,
             None => return None,
@@ -73,7 +77,7 @@ impl WebSocket {
         }
     }
 
-    async fn send(&mut self, message: &str) -> Result<(), Error> {
+    pub async fn send(&mut self, message: &str) -> Result<(), Error> {
         let write = match &mut self.write {
             Some(write) => write,
             None => return Err(Error::AlreadyClosed),
@@ -88,9 +92,19 @@ impl WebSocket {
         }
     }
 
-    fn close(&mut self) {
+    pub async fn close(&mut self) {
         match &mut self.write {
-            Some(write) => { write.close(); },
+            Some(write) => {
+                match write.send(tungstenite::Message::Text("CLOSE".to_string())).await
+                {
+                    Ok(_) => (),
+                    Err(_) => (),
+                };
+                match write.close().await {
+                    Ok(_) => (),
+                    Err(_) => (),
+                };
+            },
             None => (),
         }
         // TODO how to close the read side?

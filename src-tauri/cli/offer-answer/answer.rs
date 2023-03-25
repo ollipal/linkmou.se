@@ -8,11 +8,11 @@ use tokio_util::codec::{BytesCodec, FramedRead};
 use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 //use std::net::{SocketAddr, TcpStream};
 use serde_json::json;
+use tokio::time::{sleep, Duration};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::{cmp, thread, time};
+use std::{cmp};
 use tokio::sync::Mutex;
-use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
@@ -37,8 +37,7 @@ use std::error::Error;
 //use tungstenite::{handshake::client::Request, Message};
 
 use futures_util::stream::SplitSink;
-use futures_util::{future, pin_mut, SinkExt, StreamExt};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use futures_util::{SinkExt};
 use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use tungstenite::Message;
@@ -54,6 +53,9 @@ use tungstenite::Error; */
 use std::sync::mpsc::{channel, Receiver, Sender};
 use tokio::task::JoinHandle;
 /* use tungstenite::Message; */
+
+mod websocket;
+use crate::websocket::WebSocket;
 
 async fn async_connect_socket(
     url: &str,
@@ -272,86 +274,55 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     //let background_loop_handler = thread::spawn(|| {
     let mut tries: u64 = 0;
     loop {
         // Print reconnections, potentially sleep
         println!("Trying to connect {}...", tries);
-        thread::sleep(time::Duration::from_millis(cmp::min(
+        sleep(Duration::from_millis(cmp::min(
             tries * SLEEP_ADD_MS,
             SLEEP_MAX_MS,
-        )));
+        )))
+        .await;
         tries += 1;
 
-        // Connect socket
+        let url = "ws://localhost:3001";
+        let mut websocket = WebSocket::new(url);
 
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(async {
-                /* {
-                    let mut socketm = SOCKET.lock().await;
-                    *socketm = Some(socket);
-                } */
-                old_main().await.unwrap();
-            });
+        println!("connecting");
+        match websocket.connect().await {
+            Ok(ok) => ok,
+            Err(_) => continue,
+        };
+        println!("connected");
+
+        match websocket.send("test").await {
+            Ok(_) => (),
+            Err(_) => {
+                println!("Could not send");
+                continue;
+            }
+        };
+
+        let message = match websocket.recv().await {
+            Some(message) => message,
+            None => {
+                println!("Could not receive");
+                continue;
+            }
+        };
+
+        println!("Received: {}", message);
+
+        websocket.close().await;
+
+        old_main().await.unwrap();
 
         break;
     }
     //});
-}
-
-async fn get_socket_write_read_handle(
-    url: &str,
-) -> Result<
-    (
-        SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
-        Receiver<String>,
-        JoinHandle<()>,
-    ),
-    tungstenite::Error,
-> {
-    let (receive_sender, receive): (Sender<String>, Receiver<String>) = channel();
-
-    let (ws_stream, _) = match connect_async(url).await {
-        Ok(socket) => socket,
-        Err(e) => return Err(e),
-    };
-
-    let (write, mut read) = ws_stream.split();
-
-    let handle = tokio::spawn(async move {
-        loop {
-            let message = match read.next().await {
-                Some(result) => match result {
-                    Ok(message) => message,
-                    Err(e) => {
-                        match e {
-                            tungstenite::Error::ConnectionClosed => (),
-                            tungstenite::Error::AlreadyClosed => (),
-                            tungstenite::Error::Protocol(_) => (),
-                            _ => println!("New error while reading message {}", e),
-                        }
-                        break;
-                    }
-                },
-                None => {
-                    println!("None message?");
-                    continue;
-                }
-            };
-
-            println!("We have message");
-            if let Err(e) = receive_sender.send(message.to_string()) {
-                println!("Error while sending receive {}", e);
-                break;
-            }
-        }
-    });
-
-    Ok((write, receive, handle))
 }
 
 async fn old_main() -> Result<()> {

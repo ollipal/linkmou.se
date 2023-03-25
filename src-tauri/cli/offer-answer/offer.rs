@@ -9,10 +9,9 @@ use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::{cmp, thread, time};
+use std::{cmp};
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
-use url::Url;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
@@ -27,7 +26,6 @@ use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
 
 use futures_util::stream::SplitSink;
-use futures_util::SinkExt;
 //use futures_util::stream::SplitStream;
 use futures_util::StreamExt;
 use tokio::net::TcpStream;
@@ -37,13 +35,17 @@ use tokio_tungstenite::WebSocketStream;
 /* use futures_util::SinkExt; */
 use tungstenite::Error;
 //use webrtc::data::message;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{sync_channel, Receiver, Sender};
 use tokio::task::JoinHandle;
 use tungstenite::Message;
+
+mod websocket;
+use crate::websocket::WebSocket;
 
 const URL: &str = "ws://localhost:3001"; // "wss://browserkvm-backend.onrender.com"
 const SLEEP_ADD_MS: u64 = 500;
 const SLEEP_MAX_MS: u64 = 5000;
+const WEBSOCKET_MESSAGE_CHECK_DELAY: u64 = 10;
 
 #[macro_use]
 extern crate lazy_static;
@@ -178,18 +180,17 @@ async fn main() {
         .await;
         tries += 1;
 
-        // Connect socket
+        let url = "ws://localhost:3001";
+        let mut websocket = WebSocket::new(url);
+
         println!("connecting");
-        let (mut write, receive, handle) = match get_socket_write_read_handle(URL).await {
+        match websocket.connect().await {
             Ok(ok) => ok,
             Err(_) => continue,
         };
         println!("connected");
 
-        match write
-            .send(tungstenite::Message::Text("test".to_string()))
-            .await
-        {
+        match websocket.send("test").await {
             Ok(_) => (),
             Err(_) => {
                 println!("Could not send");
@@ -197,9 +198,9 @@ async fn main() {
             }
         };
 
-        let message = match receive.recv() {
-            Ok(message) => message,
-            Err(_) => {
+        let message = match websocket.recv().await {
+            Some(message) => message,
+            None => {
                 println!("Could not receive");
                 continue;
             }
@@ -207,66 +208,16 @@ async fn main() {
 
         println!("Received: {}", message);
 
-        old_main().await.unwrap();
+        //websocket.close().await;
 
-        handle.await.expect("The read task failed.");
+        old_main(websocket).await.unwrap();
+
         break;
     }
     //});
 }
 
-async fn get_socket_write_read_handle(
-    url: &str,
-) -> Result<
-    (
-        SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
-        Receiver<String>,
-        JoinHandle<()>,
-    ),
-    Error,
-> {
-    let (receive_sender, receive): (Sender<String>, Receiver<String>) = channel();
-
-    let (ws_stream, _) = match connect_async(url).await {
-        Ok(socket) => socket,
-        Err(e) => return Err(e),
-    };
-
-    let (write, mut read) = ws_stream.split();
-
-    let handle = tokio::spawn(async move {
-        loop {
-            let message = match read.next().await {
-                Some(result) => match result {
-                    Ok(message) => message,
-                    Err(e) => {
-                        match e {
-                            Error::ConnectionClosed => (),
-                            Error::AlreadyClosed => (),
-                            Error::Protocol(_) => (),
-                            _ => println!("New error while reading message {}", e),
-                        }
-                        break;
-                    }
-                },
-                None => {
-                    println!("None message?");
-                    continue;
-                }
-            };
-
-            println!("We have message");
-            if let Err(e) = receive_sender.send(message.to_string()) {
-                println!("Error while sending receive {}", e);
-                break;
-            }
-        }
-    });
-
-    Ok((write, receive, handle))
-}
-
-async fn old_main() -> Result<()> {
+async fn old_main(mut websocket: WebSocket) -> Result<()> {
     let mut app = Command::new("Offer")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
@@ -364,8 +315,14 @@ async fn old_main() -> Result<()> {
     let pc = Arc::downgrade(&peer_connection);
     let pending_candidates2 = Arc::clone(&PENDING_CANDIDATES);
     let addr2 = answer_addr.clone();
+    
+    let (tx, rx) = sync_channel(1);
+
     peer_connection.on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
         println!("on_ice_candidate");
+        
+        
+        tx.send("on_ice_candidate").unwrap();
 
         let pc2 = pc.clone();
         let pending_candidates3 = Arc::clone(&pending_candidates2);
@@ -401,6 +358,23 @@ async fn old_main() -> Result<()> {
             eprintln!("server error: {e}");
         }
     });
+
+    tokio::spawn(async move {
+        println!("SPAWNED");
+        loop {
+            let msg = rx.try_iter().next();
+
+            if msg.is_some() {
+                websocket.send(msg.unwrap()).await.unwrap();
+                // TODO stop loop if connected
+            }
+            
+            sleep(Duration::from_millis(WEBSOCKET_MESSAGE_CHECK_DELAY)).await;
+            //println!("100 ms have elapsed");
+        }
+        
+    });
+
 
     // Create a datachannel with label 'data'
     let data_channel = peer_connection.create_data_channel("data", None).await?;
