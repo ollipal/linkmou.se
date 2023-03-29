@@ -35,7 +35,7 @@ use tokio_tungstenite::WebSocketStream;
 /* use futures_util::SinkExt; */
 use tungstenite::Error;
 //use webrtc::data::message;
-use std::sync::mpsc::{sync_channel, Receiver, Sender};
+use std::sync::mpsc::{sync_channel, Receiver, Sender, SyncSender};
 use tokio::task::JoinHandle;
 use tungstenite::Message;
 
@@ -45,7 +45,7 @@ use crate::websocket::WebSocket;
 const URL: &str = "ws://localhost:3001"; // "wss://browserkvm-backend.onrender.com"
 const SLEEP_ADD_MS: u64 = 500;
 const SLEEP_MAX_MS: u64 = 5000;
-const WEBSOCKET_MESSAGE_CHECK_DELAY: u64 = 10;
+const WEBSOCKET_MESSAGE_CHECK_DELAY: u64 = 100;
 
 #[macro_use]
 extern crate lazy_static;
@@ -58,10 +58,10 @@ lazy_static! {
 }
 
 async fn signal_candidate(addr: &str, c: &RTCIceCandidate) -> Result<()> {
-    /*println!(
+    println!(
         "signal_candidate Post candidate to {}",
         format!("http://{}/candidate", addr)
-    );*/
+    );
     let payload = c.to_json()?.candidate;
     let req = match Request::builder()
         .method(Method::POST)
@@ -147,6 +147,7 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
             {
                 let cs = PENDING_CANDIDATES.lock().await;
                 for c in &*cs {
+
                     if let Err(err) = signal_candidate(&addr, c).await {
                         panic!("{}", err);
                     }
@@ -164,6 +165,14 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
             Ok(not_found)
         }
     }
+}
+
+async fn read_message(websocket: &mut WebSocket) -> Option<String> {
+    websocket.recv().await
+}
+
+async fn wait() {
+    sleep(Duration::from_millis(WEBSOCKET_MESSAGE_CHECK_DELAY)).await;
 }
 
 #[tokio::main]
@@ -210,14 +219,60 @@ async fn main() {
 
         //websocket.close().await;
 
-        old_main(websocket).await.unwrap();
+        let (tx, rx) : (SyncSender<String>, Receiver<String>) = sync_channel(1);
+        let shared_tx = Arc::new(tx);
+
+
+        let handle = tokio::spawn(async move {
+            println!("SPAWNED");
+            loop {
+                let msg = rx.try_iter().next();
+    
+                if msg.is_some() {
+                    let msg = msg.unwrap();
+                    println!("SENDING: {}", msg);
+                    websocket.send(&msg).await.unwrap();
+                    // TODO stop loop if connected
+                }
+                
+                // TODO handle close (call websocket close)
+                // TODO handle connected (sleep 1000 ms?)
+
+                tokio::select! {
+                    msg = read_message(&mut websocket) => {
+                        match msg {
+                            Some(msg) => println!("msg received: {}", msg),
+                            None => println!("None received"),
+                        }
+                        
+                    }
+                    _ = wait() => {
+                        println!("timeout")
+                    }
+                };
+
+                
+
+                
+                //println!("100 ms have elapsed");
+            }
+            
+        });
+
+
+        //let shared_rx = Arc::new(rx);
+
+        old_main(shared_tx).await.unwrap();
+
+        // TODO send stop
+        // TODO join handle
 
         break;
     }
     //});
 }
 
-async fn old_main(mut websocket: WebSocket) -> Result<()> {
+async fn old_main(shared_tx: Arc<SyncSender<String>>) -> Result<()> {
     let mut app = Command::new("Offer")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
@@ -315,14 +370,15 @@ async fn old_main(mut websocket: WebSocket) -> Result<()> {
     let pc = Arc::downgrade(&peer_connection);
     let pending_candidates2 = Arc::clone(&PENDING_CANDIDATES);
     let addr2 = answer_addr.clone();
-    
-    let (tx, rx) = sync_channel(1);
+
+    let tx = Arc::clone(&shared_tx);
 
     peer_connection.on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
         println!("on_ice_candidate");
         
         
-        tx.send("on_ice_candidate").unwrap();
+        let tx = Arc::clone(&tx);
+        tx.send("on_ice_candidate".to_string()).unwrap();
 
         let pc2 = pc.clone();
         let pending_candidates3 = Arc::clone(&pending_candidates2);
@@ -330,10 +386,17 @@ async fn old_main(mut websocket: WebSocket) -> Result<()> {
         Box::pin(async move {
             if let Some(c) = c {
                 if let Some(pc) = pc2.upgrade() {
+
+                    println!("ACTUAL -------");
+
                     let desc = pc.remote_description().await;
                     if desc.is_none() {
                         let mut cs = pending_candidates3.lock().await;
                         cs.push(c);
+
+                        println!("ACTUAL");
+                        tx.send("actual candidate".to_string()).unwrap();
+
                     } else if let Err(err) = signal_candidate(&addr3, &c).await {
                         panic!("{}", err);
                     }
@@ -357,22 +420,6 @@ async fn old_main(mut websocket: WebSocket) -> Result<()> {
         if let Err(e) = server.await {
             eprintln!("server error: {e}");
         }
-    });
-
-    tokio::spawn(async move {
-        println!("SPAWNED");
-        loop {
-            let msg = rx.try_iter().next();
-
-            if msg.is_some() {
-                websocket.send(msg.unwrap()).await.unwrap();
-                // TODO stop loop if connected
-            }
-            
-            sleep(Duration::from_millis(WEBSOCKET_MESSAGE_CHECK_DELAY)).await;
-            //println!("100 ms have elapsed");
-        }
-        
     });
 
 
@@ -452,6 +499,11 @@ async fn old_main(mut websocket: WebSocket) -> Result<()> {
         Ok(req) => req,
         Err(err) => panic!("{}", err),
     };
+
+    let tx = Arc::clone(&shared_tx);
+
+
+    tx.send("sending sdp".to_string()).unwrap();
 
     let _resp = match Client::new().request(req).await {
         Ok(resp) => resp,

@@ -20,7 +20,7 @@ pub struct WebSocket {
     url: String,
 }
 
-impl<'ws> WebSocket {
+impl WebSocket {
     pub fn new(url: &str) -> Self {
         WebSocket {
             write: None,
