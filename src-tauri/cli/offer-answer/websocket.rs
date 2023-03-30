@@ -1,3 +1,4 @@
+use serde_json::json;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::task::JoinHandle;
 
@@ -16,7 +17,6 @@ use tokio::time::{sleep, Duration};
 pub struct WebSocket {
     write: Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>,
     read: Option<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>,
-    connected: bool,
     url: String,
 }
 
@@ -25,24 +25,31 @@ impl WebSocket {
         WebSocket {
             write: None,
             read: None,
-            connected: false,
             url: url.to_string(),
         }
     }
 
-    pub async fn connect(&mut self) -> Result<(), Error> {
-        self.connected = false;
-
+    pub async fn connect(&mut self, id: String) -> Result<(), Error> {
         let (ws_stream, _) = match connect_async(self.url.to_string()).await {
             Ok(socket) => socket,
             Err(e) => return Err(e),
         };
 
-        let (write, read) = ws_stream.split();
+        let (mut write, read) = ws_stream.split();
+        
+        let set_id_message = json!({
+            "operation": "SET_ID",
+            "id": id
+        });
+    
+        match write.send(Message::Text(set_id_message.to_string())).await {
+            Err(e) => return Err(e),
+            _ => (),
+        }
+        
         self.write = Some(write);
         self.read = Some(read);
 
-        self.connected = true;
         Ok(())
     }
 
@@ -66,7 +73,7 @@ impl WebSocket {
                 }
             },
             None => {
-                println!("None message???");
+                println!("Websocket has disconnected most likely");
                 return None;
             }
         };
@@ -118,7 +125,7 @@ async fn main() {
         let mut websocket = WebSocket::new(url);
 
         println!("connecting");
-        match websocket.connect().await {
+        match websocket.connect("desktop_1234".to_string()).await {
             Ok(ok) => ok,
             Err(_) => continue,
         };
@@ -142,7 +149,7 @@ async fn main() {
 
         println!("Received: {}", message);
 
-        websocket.close();
+        websocket.close().await;
         break;
 
         //handle.await.expect("The read task failed.");

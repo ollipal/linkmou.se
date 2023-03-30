@@ -292,7 +292,7 @@ async fn main() {
         let mut websocket = WebSocket::new(url);
 
         println!("connecting");
-        match websocket.connect().await {
+        match websocket.connect("desktop_1234".to_string()).await {
             Ok(ok) => ok,
             Err(_) => continue,
         };

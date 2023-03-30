@@ -45,7 +45,7 @@ use crate::websocket::WebSocket;
 const URL: &str = "ws://localhost:3001"; // "wss://browserkvm-backend.onrender.com"
 const SLEEP_ADD_MS: u64 = 500;
 const SLEEP_MAX_MS: u64 = 5000;
-const WEBSOCKET_MESSAGE_CHECK_DELAY: u64 = 100;
+const WEBSOCKET_MESSAGE_CHECK_DELAY: u64 = 1000;
 
 #[macro_use]
 extern crate lazy_static;
@@ -168,7 +168,13 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
 }
 
 async fn read_message(websocket: &mut WebSocket) -> Option<String> {
-    websocket.recv().await
+    let msg = websocket.recv().await;
+
+    if msg.is_none() {
+        wait().await;
+        wait().await;
+    }
+    msg
 }
 
 async fn wait() {
@@ -193,7 +199,7 @@ async fn main() {
         let mut websocket = WebSocket::new(url);
 
         println!("connecting");
-        match websocket.connect().await {
+        match websocket.connect("browser_1234".to_string()).await {
             Ok(ok) => ok,
             Err(_) => continue,
         };
