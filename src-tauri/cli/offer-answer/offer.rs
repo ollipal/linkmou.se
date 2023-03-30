@@ -202,8 +202,7 @@ async fn main() {
         .await;
         tries += 1;
 
-        let url = "ws://localhost:3001";
-        let mut websocket = WebSocket::new(url);
+        let mut websocket = WebSocket::new(URL);
 
         println!("connecting");
         match websocket.connect("browser_1234".to_string()).await {
@@ -250,6 +249,13 @@ async fn main() {
                 if msg.is_some() {
                     let msg = msg.unwrap();
                     println!("SENDING: {}", msg);
+
+                    // TODO use string
+                    let addr = {
+                        let addr = ADDRESS.lock().await;
+                        addr.clone()
+                    };
+
                     websocket.send(&msg).await.unwrap();
                     // TODO stop loop if connected
                 }
@@ -260,8 +266,58 @@ async fn main() {
                 tokio::select! {
                     msg = read_message(&mut websocket) => {
                         match msg {
-                            Some(msg) => println!("msg received: {}", msg),
                             None => println!("None received"),
+                            Some(msg) => {
+                                println!("msg received: {}", msg);
+
+                                let pc = {
+                                    let pcm = PEER_CONNECTION_MUTEX.lock().await;
+                                    pcm.clone().unwrap()
+                                };
+
+                                // /candidate
+                                let candidate = "placeholder".to_string();
+
+                                if let Err(err) = pc
+                                    .add_ice_candidate(RTCIceCandidateInit {
+                                        candidate,
+                                        ..Default::default()
+                                    })
+                                    .await
+                                {
+                                    println!("Could not add_ica_candidate: {}", err);
+                                }
+
+                                // /sdp
+
+                                let sdp_str = "placeholder".to_string();
+
+                                let sdp = match serde_json::from_str::<RTCSessionDescription>(&sdp_str) {
+                                    Ok(s) => s,
+                                    Err(err) => panic!("{}", err),
+                                };
+                    
+                                if let Err(err) = pc.set_remote_description(sdp).await {
+                                    panic!("{}", err);
+                                }
+                    
+                                {
+                                    let cs = PENDING_CANDIDATES.lock().await;
+                                    
+                                    let addr = {
+                                        let addr = ADDRESS.lock().await;
+                                        addr.clone()
+                                    };
+                                    
+                                    for c in &*cs {
+                    
+                                        if let Err(err) = signal_candidate(&addr, c).await {
+                                            panic!("{}", err);
+                                        }
+                                    }
+                                }
+
+                            },
                         }
                         
                     }
@@ -269,10 +325,6 @@ async fn main() {
                         println!("timeout")
                     }
                 };
-
-                
-
-                
                 //println!("100 ms have elapsed");
             }
             
