@@ -306,7 +306,7 @@ async fn main() {
             }
         };
 
-        let message = match websocket.recv().await {
+        /* let message = match websocket.recv().await {
             Some(message) => message,
             None => {
                 println!("Could not receive");
@@ -314,11 +314,11 @@ async fn main() {
             }
         };
 
-        println!("Received: {}", message);
-
-        websocket.close().await;
+        println!("Received: {}", message); */
 
         old_main().await.unwrap();
+
+        websocket.close().await;
 
         break;
     }
