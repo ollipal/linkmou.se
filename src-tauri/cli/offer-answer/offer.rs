@@ -3,8 +3,6 @@ use clap::{AppSettings, Arg, Command};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Client, Method, Request, Response, Server, StatusCode};
 use serde_json::json;
-/* use tungstenite::{WebSocket, connect, Message};
-use tungstenite::stream::MaybeTlsStream; */
 use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -177,15 +175,15 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
 async fn read_message(websocket: &mut WebSocket) -> Option<String> {
     let msg = websocket.recv().await;
 
-    if msg.is_none() {
-        wait().await;
-        wait().await;
+    if msg.is_none() { // Give more time for wait() to finish...
+        wait(2 * WEBSOCKET_MESSAGE_CHECK_DELAY).await;
     }
+
     msg
 }
 
-async fn wait() {
-    sleep(Duration::from_millis(WEBSOCKET_MESSAGE_CHECK_DELAY)).await;
+async fn wait(duration: u64) {
+    sleep(Duration::from_millis(duration)).await;
 }
 
 #[tokio::main]
@@ -204,45 +202,21 @@ async fn main() {
 
         let mut websocket = WebSocket::new(URL);
 
-        println!("connecting");
+        println!("websocket: connecting...");
         match websocket.connect("browser_1234".to_string()).await {
             Ok(ok) => ok,
             Err(_) => continue,
         };
-        println!("connected");
-
-        match websocket.send("test").await {
-            Ok(_) => (),
-            Err(_) => {
-                println!("Could not send");
-                continue;
-            }
-        };
-
-        /* let message = match websocket.recv().await {
-            Some(message) => message,
-            None => {
-                println!("Could not receive");
-                continue;
-            }
-        };
-
-        println!("Received: {}", message); */
-
-        //websocket.close().await;
+        println!("websocket: ...connected");
 
         let (tx, rx) : (SyncSender<String>, Receiver<String>) = sync_channel(1);
-
         {
             let mut tx2 = TX.lock().await;
             *tx2 = Some(tx);
         }
 
-        //let shared_tx = Arc::new(tx);
-
-
         let handle = tokio::spawn(async move {
-            println!("SPAWNED");
+            println!("websocket thread spawn");
             loop {
                 let msg = rx.try_iter().next();
     
@@ -256,8 +230,10 @@ async fn main() {
                         addr.clone()
                     };
 
-                    websocket.send(&msg).await.unwrap();
-                    // TODO stop loop if connected
+                    if let Err(err) = websocket.send(&msg).await {
+                        println!("websocket: could not send, {}", err)
+                        // TODO end thread?
+                    };
                 }
                 
                 // TODO handle close (call websocket close)
@@ -266,9 +242,9 @@ async fn main() {
                 tokio::select! {
                     msg = read_message(&mut websocket) => {
                         match msg {
-                            None => println!("None received"),
+                            None => println!("websocket: received None"),
                             Some(msg) => {
-                                println!("msg received: {}", msg);
+                                println!("websocket: received: {}", msg);
 
                                 let pc = {
                                     let pcm = PEER_CONNECTION_MUTEX.lock().await;
@@ -285,7 +261,7 @@ async fn main() {
                                     })
                                     .await
                                 {
-                                    println!("Could not add_ica_candidate: {}", err);
+                                    println!("Could not add_ice_candidate: {}", err);
                                 }
 
                                 // /sdp
@@ -301,16 +277,14 @@ async fn main() {
                                     panic!("{}", err);
                                 }
                     
-                                {
-                                    let cs = PENDING_CANDIDATES.lock().await;
-                                    
+                                {   
                                     let addr = {
                                         let addr = ADDRESS.lock().await;
                                         addr.clone()
                                     };
-                                    
+
+                                    let cs = PENDING_CANDIDATES.lock().await;
                                     for c in &*cs {
-                    
                                         if let Err(err) = signal_candidate(&addr, c).await {
                                             panic!("{}", err);
                                         }
@@ -321,24 +295,22 @@ async fn main() {
                         }
                         
                     }
-                    _ = wait() => {
+                    // TODO change the duration to longer if connected for a while
+                    // or even cut the connection
+                    _ = wait(WEBSOCKET_MESSAGE_CHECK_DELAY) => {
                         println!("timeout")
                     }
                 };
                 //println!("100 ms have elapsed");
             }
-            
+            println!("websocket thread end");
         });
 
-
-        //let shared_rx = Arc::new(rx);
-
-        old_main(/* shared_tx */).await.unwrap();
-
-        //websocket.close().await;
+        old_main().await.unwrap();
 
         // TODO send stop
         // TODO join handle
+        //websocket.close().await;
 
         break;
     }
@@ -348,8 +320,8 @@ async fn main() {
 async fn old_main(/* shared_tx: Arc<SyncSender<String>> */) -> Result<()> {
     let mut app = Command::new("Offer")
         .version("0.1.0")
-        .author("Rain Liu <yliu@webrtc.rs>")
-        .about("An example of WebRTC-rs Offer.")
+        .author("Olli Paloviita")
+        .about("browserkwm offer")
         .setting(AppSettings::DeriveDisplayOrder)
         .subcommand_negates_reqs(true)
         .arg(
@@ -444,31 +416,18 @@ async fn old_main(/* shared_tx: Arc<SyncSender<String>> */) -> Result<()> {
     let pending_candidates2 = Arc::clone(&PENDING_CANDIDATES);
     let addr2 = answer_addr.clone();
 
-    /* let tx = Arc::clone(&shared_tx); */
-
     peer_connection.on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
         /* println!("on_ice_candidate"); */
-        
-        
-        /* let tx = Arc::clone(&tx); */
-        /* tx.send("on_ice_candidate".to_string()).unwrap(); */
-
         let pc2 = pc.clone();
         let pending_candidates3 = Arc::clone(&pending_candidates2);
         let addr3 = addr2.clone();
         Box::pin(async move {
             if let Some(c) = c {
                 if let Some(pc) = pc2.upgrade() {
-
-                    println!("ACTUAL -------");
-
                     let desc = pc.remote_description().await;
                     if desc.is_none() {
                         let mut cs = pending_candidates3.lock().await;
                         cs.push(c);
-
-                        println!("ice candidate");
-
                     } else if let Err(err) = signal_candidate(&addr3, &c).await {
                         panic!("{}", err);
                     }

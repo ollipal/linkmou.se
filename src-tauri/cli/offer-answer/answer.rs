@@ -29,52 +29,9 @@ use webrtc::peer_connection::RTCPeerConnection;
 //use tungstenite::{WebSocket, connect, Message};
 //use tungstenite::stream::MaybeTlsStream;
 use std::clone::Clone;
-use url::Url;
-
-use std::error::Error;
-//use tokio::net::{/* TcpStream,  */ToSocketAddrs};
-//use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
-//use tungstenite::{handshake::client::Request, Message};
-
-use futures_util::stream::SplitSink;
-use futures_util::{SinkExt};
-use tokio::net::{TcpStream, ToSocketAddrs};
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
-use tungstenite::Message;
-//use futures_util::stream::SplitStream;
-/* use tokio::net::TcpStream;
-use tokio_tungstenite::MaybeTlsStream;
-use tokio_tungstenite::WebSocketStream;
-use tokio_tungstenite::connect_async;
-use futures_util::StreamExt;
-use futures_util::SinkExt;
-use tungstenite::Error; */
-//use webrtc::data::message;
-use std::sync::mpsc::{channel, Receiver, Sender};
-use tokio::task::JoinHandle;
-/* use tungstenite::Message; */
 
 mod websocket;
 use crate::websocket::WebSocket;
-
-async fn async_connect_socket(
-    url: &str,
-) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, Box<dyn Error>> {
-    let (mut socket, _) = connect_async(Request::builder().uri(url).body(())?).await?;
-
-    // Set socket id
-    // This enables receiving messages
-    let set_id_message = serde_json::json!({
-        "operation": "SET_ID",
-        "id": "desktop_1234"
-    });
-
-    socket
-        .send(Message::Text(set_id_message.to_string()))
-        .await?;
-
-    Ok(socket)
-}
 
 const URL: &str = "ws://localhost:3001"; // "wss://browserkvm-backend.onrender.com"
 const SLEEP_ADD_MS: u64 = 500;
@@ -88,24 +45,15 @@ lazy_static! {
         Arc::new(Mutex::new(None));
     static ref PENDING_CANDIDATES: Arc<Mutex<Vec<RTCIceCandidate>>> = Arc::new(Mutex::new(vec![]));
     static ref ADDRESS: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
-    //static ref SOCKET: Arc<Mutex<Option<WebSocket<MaybeTlsStream<TcpStream>>>>> = Arc::new(Mutex::new(None));
+
 }
 
-static INDEX: &str = "cli/offer-answer/index.html";
-static NOTFOUND: &[u8] = b"Not Found";
-
 async fn signal_candidate(addr: &str, c: &RTCIceCandidate) -> Result<()> {
-    /*println!(
+    println!(
         "signal_candidate Post candidate to {}",
         format!("http://{}/candidate", addr)
-    );*/
+    );
     let payload = c.to_json()?.candidate;
-
-    /* let socket = {
-        let socketm = SOCKET.lock().await;
-        socketm.clone()
-    }; */
-
     let req = match Request::builder()
         .method(Method::POST)
         .uri(format!("http://{addr}/candidate"))
@@ -131,26 +79,6 @@ async fn signal_candidate(addr: &str, c: &RTCIceCandidate) -> Result<()> {
     Ok(())
 }
 
-/// HTTP status code 404
-fn not_found() -> Response<Body> {
-    Response::builder()
-        .status(StatusCode::NOT_FOUND)
-        .body(NOTFOUND.into())
-        .unwrap()
-}
-
-async fn simple_file_send(filename: &str) -> Result<Response<Body>, hyper::Error> {
-    // Serve a file by asynchronously reading it by chunks using tokio-util crate.
-
-    if let Ok(file) = tokio::fs::File::open(filename).await {
-        let stream = FramedRead::new(file, BytesCodec::new());
-        let body = Body::wrap_stream(stream);
-        return Ok(Response::new(body));
-    }
-
-    Ok(not_found())
-}
-
 // HTTP Listener to get ICE Credentials/Candidate from remote Peer
 async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
     let pc = {
@@ -163,7 +91,6 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
     };
 
     match (req.method(), req.uri().path()) {
-        (&Method::GET, "/") | (&Method::GET, "/index.html") => simple_file_send(INDEX).await,
         // A HTTP handler that allows the other WebRTC-rs or Pion instance to send us ICE candidates
         // This allows us to add ICE candidates faster, we don't have to wait for STUN or TURN
         // candidates which may be slower
@@ -226,7 +153,6 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
                 Err(err) => panic!("{}", err),
             };
 
-            println!("HERE");
 
             let req = match Request::builder()
                 .method(Method::POST)
@@ -288,33 +214,14 @@ async fn main() {
         .await;
         tries += 1;
 
-        let url = "ws://localhost:3001";
-        let mut websocket = WebSocket::new(url);
+        let mut websocket = WebSocket::new(URL);
 
-        println!("connecting");
+        println!("websocket: connecting...");
         match websocket.connect("desktop_1234".to_string()).await {
             Ok(ok) => ok,
             Err(_) => continue,
         };
-        println!("connected");
-
-        match websocket.send("test").await {
-            Ok(_) => (),
-            Err(_) => {
-                println!("Could not send");
-                continue;
-            }
-        };
-
-        /* let message = match websocket.recv().await {
-            Some(message) => message,
-            None => {
-                println!("Could not receive");
-                continue;
-            }
-        };
-
-        println!("Received: {}", message); */
+        println!("websocket: ...connected");
 
         old_main().await.unwrap();
 
@@ -328,8 +235,8 @@ async fn main() {
 async fn old_main() -> Result<()> {
     let mut app = Command::new("Answer")
         .version("0.1.0")
-        .author("Rain Liu <yliu@webrtc.rs>")
-        .about("An example of WebRTC-rs Answer.")
+        .author("Olli Paloviita")
+        .about("browserkwm answer")
         .setting(AppSettings::DeriveDisplayOrder)
         .subcommand_negates_reqs(true)
         .arg(
