@@ -26,7 +26,8 @@ use std::sync::mpsc::{SyncSender};
 mod websocket;
 use crate::websocket::WebSocket;
 
-const URL: &str = "ws://localhost:3001"; // "wss://browserkvm-backend.onrender.com"
+//const URL: &str = "ws://localhost:3001";
+const URL: &str = "wss://browserkvm-backend.onrender.com:443";
 const SLEEP_ADD_MS: u64 = 500;
 const SLEEP_MAX_MS: u64 = 5000;
 

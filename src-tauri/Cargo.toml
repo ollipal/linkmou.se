@@ -32,7 +32,7 @@ env_logger = "0.10.0" # not necessary?
 chrono = "0.4.24" # not necessary?
 log = "0.4.17" # not necessary?
 tokio-util = "0.7.7" # not necessary?
-tokio-tungstenite = "0.18.0"
+tokio-tungstenite = {version = "0.18.0", features = ["native-tls"] }
 futures-util = "0.3.27"
 futures-channel = "0.3.27"
 futures = "0.3.28"
