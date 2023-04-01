@@ -446,7 +446,6 @@ dependencies = [
  "futures",
  "futures-channel",
  "futures-util",
- "hyper",
  "lazy_static",
  "log",
  "rdev",
