@@ -24,7 +24,7 @@ use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
 
-use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
+use std::sync::mpsc::{SyncSender};
 
 mod websocket;
 use crate::websocket::WebSocket;
@@ -32,7 +32,6 @@ use crate::websocket::WebSocket;
 const URL: &str = "ws://localhost:3001"; // "wss://browserkvm-backend.onrender.com"
 const SLEEP_ADD_MS: u64 = 500;
 const SLEEP_MAX_MS: u64 = 5000;
-const WEBSOCKET_MESSAGE_CHECK_DELAY: u64 = 1000;
 
 #[macro_use]
 extern crate lazy_static;
@@ -171,20 +170,6 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
             Ok(not_found)
         }
     }
-}
-
-async fn read_message(websocket: &mut WebSocket) -> Option<String> {
-    let msg = websocket.recv().await;
-
-    if msg.is_none() { // Give more time for wait() to finish...
-        wait(2 * WEBSOCKET_MESSAGE_CHECK_DELAY).await;
-    }
-
-    msg
-}
-
-async fn wait(duration: u64) {
-    sleep(Duration::from_millis(duration)).await;
 }
 
 #[tokio::main]
