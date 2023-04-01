@@ -26,8 +26,11 @@ struct WebSocketMessage {
     content: String,
 }
 
+pub static CLOSE: &str = "CLOSE";
+
 const WEBSOCKET_MESSAGE_CHECK_DELAY: u64 = 1000;
 const WEBSOCKET_MESSAGE_BUFFER_SIZE: usize = 250;
+const WEBRTC_CONNECTED_DELAY: u64 = 1000; // Allow last candidates to arrive
 
 impl WebSocket {
     pub fn new(url: &str) -> Self {
@@ -153,11 +156,35 @@ where
     let thread_handle = tokio::spawn(async move {
         println!("websocket thread spawn");
         
+        let mut close = false;
         loop {
             let msg = rx.try_iter().next();
 
+            if close {
+                println!("websocket: closing");
+
+                let websocket_message = json!({
+                    "operation": "CLOSE",
+                    "id": "-",
+                }).to_string();
+
+                if let Err(err) = websocket.send(&websocket_message).await {
+                    println!("websocket: could not send, {}", err)
+                };
+
+                break;
+            }
+
+
             if msg.is_some() {
                 let msg = msg.unwrap();
+
+                if msg == CLOSE.to_string() {
+                    close = true;
+                    sleep(Duration::from_millis(WEBRTC_CONNECTED_DELAY)).await;
+                    continue;
+                }
+
                 println!("websocket: sending: {}", msg);
 
                 let websocket_message = &json!(WebSocketMessage {
@@ -180,11 +207,7 @@ where
                         None => println!("websocket: received None"),
                         Some(msg) => {
                             //println!("websocket: received: {}", msg);
-
-
-                            //on_ws_receive(msg).boxed_local(); 
                             on_ws_receive(msg).await;
-                            //copy.lock().await;
                         },
                     }
                     

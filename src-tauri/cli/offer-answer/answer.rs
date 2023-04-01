@@ -26,12 +26,13 @@ use webrtc::peer_connection::RTCPeerConnection;
 use std::clone::Clone;
 
 mod websocket;
-use crate::websocket::WebSocket;
+use crate::websocket::{WebSocket, CLOSE};
 
-//const URL: &str = "ws://localhost:3001";
-const URL: &str = "wss://browserkvm-backend.onrender.com:443";
+const URL: &str = "ws://localhost:3001";
+//const URL: &str = "wss://browserkvm-backend.onrender.com:443";
 const SLEEP_ADD_MS: u64 = 500;
 const SLEEP_MAX_MS: u64 = 5000;
+const CONNECTION_STABLE_TIMEOUT: u64 = 15000;
 
 #[derive(Serialize, Deserialize)]
 struct SignalingMessage {
@@ -65,12 +66,12 @@ async fn signal_candidate(c: &RTCIceCandidate) -> Result<()> {
             match tx {
                 Some(tx) => match tx.send(signaling_message.to_string()) {
                     Ok(_) => (),
-                    Err(_) => todo!(),
+                    Err(_) => println!("Could not send candidate 1"),
                 },
-                None => println!("Could not send candidate"),
+                None => println!("Could not send candidate 2"),
             }    
         },
-        Err(_) => todo!(),
+        Err(_) => println!("Could not send candidate 3"),
     };
 
     Ok(())
@@ -96,6 +97,7 @@ async fn main() {
         if let Err(_) = websocket.connect("desktop_1234".to_string()).await {
             continue;
         };
+        tries = 0;
         println!("websocket: ...connected");
 
         let on_ws_receive = | msg: String | async move {
@@ -154,9 +156,9 @@ async fn main() {
                 match tx {
                     Some(tx) => match tx.send(signaling_message.to_string()) {
                         Ok(_) => (),
-                        Err(_) => todo!(),
+                        Err(_) => println!("Could not send RTCSessionDescription 1"),
                     },
-                    None => println!("RTCSessionDescription"),
+                    None => println!("Could not send RTCSessionDescription 2"),
                 }    
                 // TODO Return here if any failures
 
@@ -197,16 +199,26 @@ async fn main() {
             *tx2 = Some(tx);
         }
 
-        old_main().await.unwrap();
+        let result = old_main().await.unwrap();
+
+        if let Err(e) = handle.await {
+            println!("Handle await error {}", e);
+        }
+
+        if result == "CTRLC".to_string() {
+            println!("breaking");
+            break;
+        }
+        println!("continue");
 
         //websocket.close().await;
 
-        break;
+        
     }
     //});
 }
 
-async fn old_main() -> Result<()> {
+async fn old_main() -> Result<String> {
     let mut app = Command::new("Answer")
         .version("0.1.0")
         .author("Olli Paloviita")
@@ -318,19 +330,33 @@ async fn old_main() -> Result<()> {
 
     let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
 
+    let tx2 = {
+        let tx = TX.lock().await;
+        tx.clone()
+    };
+
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
         println!("Peer Connection State has changed: {s}");
 
-        if s == RTCPeerConnectionState::Failed {
+        if s == RTCPeerConnectionState::Failed || s == RTCPeerConnectionState::Disconnected {
             // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
             // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
             // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-            println!("Peer Connection has gone to failed exiting");
+            println!("Peer Connection has gone to failed/disconnected exiting");
             let _ = done_tx.try_send(());
         }
 
+        if s == RTCPeerConnectionState::Connected {
+            match &tx2 {
+                Some(tx) => match tx.send(CLOSE.to_string()) {
+                    Ok(_) => (),
+                    Err(_) => println!("Could not send CLOSE 1"),
+                },
+                None => println!("Could not send CLOSE 2"),
+            }
+        }
         Box::pin(async {})
     }));
 
@@ -374,16 +400,31 @@ async fn old_main() -> Result<()> {
     }));
 
     println!("Press ctrl-c to stop");
-    tokio::select! {
+    let result = tokio::select! {
         _ = done_rx.recv() => {
             println!("received done signal!");
+            "DISCONNECT"
         }
         _ = tokio::signal::ctrl_c() => {
             println!();
+            "CTRLC"
         }
     };
 
     peer_connection.close().await?;
 
-    Ok(())
+    let tx = {
+        let tx = TX.lock().await;
+        tx.clone()
+    };
+    
+    match tx {
+        Some(tx) => match tx.send(CLOSE.to_string()) {
+            Ok(_) => (),
+            Err(_) => println!("Could not send CLOSE"),
+        },
+        None => println!("Could not send CLOSE"),
+    }
+
+    Ok(result.to_string())
 }
