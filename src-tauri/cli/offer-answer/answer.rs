@@ -58,12 +58,12 @@ lazy_static! {
 }
 
 async fn signal_candidate(addr: &str, c: &RTCIceCandidate) -> Result<()> {
-    println!(
+    /* println!(
         "signal_candidate Post candidate to {}",
         format!("http://{}/candidate", addr)
-    );
+    ); */
     let payload = c.to_json()?.candidate;
-    let req = match Request::builder()
+    /* let req = match Request::builder()
         .method(Method::POST)
         .uri(format!("http://{addr}/candidate"))
         .header("content-type", "application/json; charset=utf-8")
@@ -82,7 +82,7 @@ async fn signal_candidate(addr: &str, c: &RTCIceCandidate) -> Result<()> {
             println!("{err}");
             return Err(err.into());
         }
-    };
+    }; */
     //println!("signal_candidate Response: {}", resp.status());
 
     let tx = {
@@ -127,6 +127,13 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
         // This allows us to add ICE candidates faster, we don't have to wait for STUN or TURN
         // candidates which may be slower
         (&Method::POST, "/candidate") => {
+            println!("Skipping!");
+            let mut response = Response::new(Body::empty());
+            *response.status_mut() = StatusCode::OK;
+            return Ok(response);
+
+
+
             println!("remote_handler receive from /candidate");
             let candidate =
                 match std::str::from_utf8(&hyper::body::to_bytes(req.into_body()).await?) {
@@ -152,6 +159,11 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
 
         // A HTTP handler that processes a SessionDescription given to us from the other WebRTC-rs or Pion process
         (&Method::POST, "/sdp") => {
+            println!("Skipping!");
+            let mut response = Response::new(Body::empty());
+            *response.status_mut() = StatusCode::OK;
+            return Ok(response);
+
             //println!("remote_handler receive from /sdp");
             let sdp_str = match std::str::from_utf8(&hyper::body::to_bytes(req.into_body()).await?)
             {
@@ -186,7 +198,7 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
             };
 
 
-            let req = match Request::builder()
+            /* let req = match Request::builder()
                 .method(Method::POST)
                 .uri(format!("http://{addr}/sdp"))
                 .header("content-type", "application/json; charset=utf-8")
@@ -202,7 +214,7 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
                     println!("{err}");
                     return Err(err);
                 }
-            };
+            }; */
             //println!("remote_handler Response: {}", resp.status());
 
             // Sets the LocalDescription, and starts our UDP listeners
@@ -257,96 +269,107 @@ async fn main() {
         let on_ws_receive = | msg: String | async move {
             println!("websocket: received: {}", msg);
 
+            let signaling_message: SignalingMessage = match serde_json::from_str(&msg) {
+                Ok(signaling_message) => signaling_message,
+                Err(e) => {
+                    println!("Could not serialize websocket message");
+                    return;
+                },
+            };
+
             let pc = {
                 let pcm = PEER_CONNECTION_MUTEX.lock().await;
                 pcm.clone().unwrap()
             };
 
-            // /candidate
-            let candidate = "placeholder".to_string();
+            
+            if signaling_message.key == "RTCSessionDescription" {
+                println!("SDP");
+                let sdp_str = &signaling_message.value;
 
-            if let Err(err) = pc
-                .add_ice_candidate(RTCIceCandidateInit {
-                    candidate,
-                    ..Default::default()
-                })
-                .await
-            {
-                println!("Could not add_ice_candidate: {}", err);
-            }
-
-            // /sdp
-
-            let sdp_str = "placeholder".to_string();
-
-            let sdp = match serde_json::from_str::<RTCSessionDescription>(&sdp_str) {
-                Ok(s) => s,
-                Err(err) => panic!("{}", err),
-            };
-
-            if let Err(err) = pc.set_remote_description(sdp).await {
-                panic!("{}", err);
-            }
-
-            // Create an answer to send to the other process
-            let answer = match pc.create_answer(None).await {
-                Ok(a) => a,
-                Err(err) => panic!("{}", err),
-            };
-
-            /*println!(
-                "remote_handler Post answer to {}",
-                format!("http://{}/sdp", addr)
-            );*/
-
-            // Send our answer to the HTTP server listening in the other process
-            let payload = match serde_json::to_string(&answer) {
-                Ok(p) => p,
-                Err(err) => panic!("{}", err),
-            };
-
-
-            let tx = {
-                let tx = TX.lock().await;
-                tx.clone()
-            };
-        
-            let signaling_message = &json!(SignalingMessage {
-                key: "RTCSessionDescription".to_string(),
-                value: payload,
-            });
-
-            match tx {
-                Some(tx) => match tx.send(signaling_message.to_string()) {
-                    Ok(_) => (),
-                    Err(_) => todo!(),
-                },
-                None => println!("RTCSessionDescription"),
-            }    
-            // TODO Return here if any failures
-
-
-
-
-            // Sets the LocalDescription, and starts our UDP listeners
-            if let Err(err) = pc.set_local_description(answer).await {
-                panic!("{}", err);
-            }
-
-            {
-                let addr = {
-                    let addr = ADDRESS.lock().await;
-                    addr.clone()
+                let sdp = match serde_json::from_str::<RTCSessionDescription>(&sdp_str) {
+                    Ok(s) => s,
+                    Err(err) => panic!("{}", err),
                 };
-
-                let cs = PENDING_CANDIDATES.lock().await;
-                for c in &*cs {
-                    if let Err(err) = signal_candidate(&addr, c).await {
-                        panic!("{}", err);
+    
+                if let Err(err) = pc.set_remote_description(sdp).await {
+                    panic!("{}", err);
+                }
+    
+                // Create an answer to send to the other process
+                let answer = match pc.create_answer(None).await {
+                    Ok(a) => a,
+                    Err(err) => panic!("{}", err),
+                };
+    
+                /*println!(
+                    "remote_handler Post answer to {}",
+                    format!("http://{}/sdp", addr)
+                );*/
+    
+                // Send our answer to the HTTP server listening in the other process
+                let payload = match serde_json::to_string(&answer) {
+                    Ok(p) => p,
+                    Err(err) => panic!("{}", err),
+                };
+    
+    
+                let tx = {
+                    let tx = TX.lock().await;
+                    tx.clone()
+                };
+            
+                let signaling_message = &json!(SignalingMessage {
+                    key: "RTCSessionDescription".to_string(),
+                    value: payload,
+                });
+    
+                match tx {
+                    Some(tx) => match tx.send(signaling_message.to_string()) {
+                        Ok(_) => (),
+                        Err(_) => todo!(),
+                    },
+                    None => println!("RTCSessionDescription"),
+                }    
+                // TODO Return here if any failures
+    
+    
+    
+    
+                // Sets the LocalDescription, and starts our UDP listeners
+                if let Err(err) = pc.set_local_description(answer).await {
+                    panic!("{}", err);
+                }
+    
+                {
+                    let addr = {
+                        let addr = ADDRESS.lock().await;
+                        addr.clone()
+                    };
+    
+                    let cs = PENDING_CANDIDATES.lock().await;
+                    for c in &*cs {
+                        if let Err(err) = signal_candidate(&addr, c).await {
+                            panic!("{}", err);
+                        }
                     }
                 }
-            }
+            } else if signaling_message.key == "RTCIceCandidate" {
+                println!("CANDIDATE");
+                let candidate = &signaling_message.value;
 
+                if let Err(err) = pc
+                    .add_ice_candidate(RTCIceCandidateInit {
+                        candidate: candidate.to_string(),
+                        ..Default::default()
+                    })
+                    .await
+                {
+                    println!("Could not add_ice_candidate: {}", err);
+                }    
+            } else {
+                println!("Unknown SignalingMessage.key: {}", signaling_message.key);
+            }
         }.boxed();
 
         let (handle, tx) = websocket::start_send_receive_thread(websocket, &"browser_1234".to_string(), on_ws_receive).await;

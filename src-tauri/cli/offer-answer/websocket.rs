@@ -29,6 +29,7 @@ struct WebSocketMessage {
 }
 
 const WEBSOCKET_MESSAGE_CHECK_DELAY: u64 = 1000;
+const WEBSOCKET_MESSAGE_BUFFER_SIZE: usize = 250;
 
 impl WebSocket {
     pub fn new(url: &str) -> Self {
@@ -148,7 +149,7 @@ where
     // BoxFuture tip from here: https://www.bitfalter.com/async-closures
 {
 
-    let (send_websocket, rx) : (SyncSender<String>, Receiver<String>) = sync_channel(1);
+    let (send_websocket, rx) : (SyncSender<String>, Receiver<String>) = sync_channel(WEBSOCKET_MESSAGE_BUFFER_SIZE);
     let recipient = String::from(recipient);
 
     let thread_handle = tokio::spawn(async move {
@@ -174,13 +175,13 @@ where
             
             // TODO thread_handle close (call websocket close)
             // TODO thread_handle connected (sleep 1000 ms?)
-
+            println!("selecting...");
             tokio::select! {
                 msg = read_message(&mut websocket) => {
                     match msg {
                         None => println!("websocket: received None"),
                         Some(msg) => {
-                            println!("websocket: received: {}", msg);
+                            //println!("websocket: received: {}", msg);
 
 
                             //on_ws_receive(msg).boxed_local(); 
