@@ -1,4 +1,6 @@
 use futures::{future::BoxFuture};
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::json;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 
@@ -18,6 +20,12 @@ pub struct WebSocket {
     write: Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>,
     read: Option<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>,
     url: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct WebSocketMessage {
+    recipient: String,
+    content: String,
 }
 
 const WEBSOCKET_MESSAGE_CHECK_DELAY: u64 = 1000;
@@ -134,16 +142,18 @@ async fn wait(duration: u64) {
     sleep(Duration::from_millis(duration)).await;
 }
 
-pub async fn start_send_receive_thread<C>(mut websocket: WebSocket, on_ws_receive: C) -> (tokio::task::JoinHandle<()>, SyncSender<std::string::String>)
+pub async fn start_send_receive_thread<C>(mut websocket: WebSocket, recipient: &String, on_ws_receive: C) -> (tokio::task::JoinHandle<()>, SyncSender<std::string::String>)
 where
     C: FnOnce(String) -> BoxFuture<'static, ()> + 'static + std::marker::Copy + std::marker::Send,
     // BoxFuture tip from here: https://www.bitfalter.com/async-closures
 {
 
     let (send_websocket, rx) : (SyncSender<String>, Receiver<String>) = sync_channel(1);
+    let recipient = String::from(recipient);
 
     let thread_handle = tokio::spawn(async move {
         println!("websocket thread spawn");
+        
         loop {
             let msg = rx.try_iter().next();
 
@@ -151,7 +161,12 @@ where
                 let msg = msg.unwrap();
                 println!("websocket: sending: {}", msg);
 
-                if let Err(err) = websocket.send(&msg).await {
+                let websocket_message = &json!(WebSocketMessage {
+                    recipient: recipient.to_string(),
+                    content: msg,
+                }).to_string();
+
+                if let Err(err) = websocket.send(&websocket_message).await {
                     println!("websocket: could not send, {}", err)
                     // TODO end thread?
                 };

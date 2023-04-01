@@ -3,6 +3,7 @@ use clap::{AppSettings, Arg, Command};
 use futures::FutureExt;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Client, Method, Request, Response, Server, StatusCode};
+use serde::{Serialize, Deserialize};
 use serde_json::json;
 use std::io::Write;
 use std::net::SocketAddr;
@@ -32,6 +33,12 @@ use crate::websocket::WebSocket;
 const URL: &str = "ws://localhost:3001"; // "wss://browserkvm-backend.onrender.com"
 const SLEEP_ADD_MS: u64 = 500;
 const SLEEP_MAX_MS: u64 = 5000;
+
+#[derive(Serialize, Deserialize)]
+struct SignalingMessage {
+    key: String,
+    value: String,
+}
 
 #[macro_use]
 extern crate lazy_static;
@@ -80,8 +87,13 @@ async fn signal_candidate(addr: &str, c: &RTCIceCandidate) -> Result<()> {
 
     match c.to_json() {
         Ok(j) => {
+            let signaling_message = &json!(SignalingMessage {
+                key: "RTCIceCandidate".to_string(),
+                value: j.candidate.to_string()
+            });
+
             match tx {
-                Some(tx) => match tx.send(j.candidate.to_string()) {
+                Some(tx) => match tx.send(signaling_message.to_string()) {
                     Ok(_) => (),
                     Err(_) => todo!(),
                 },
@@ -243,7 +255,7 @@ async fn main() {
             }
         }.boxed();
 
-        let (handle, tx) = websocket::start_send_receive_thread(websocket, on_ws_receive).await;
+        let (handle, tx) = websocket::start_send_receive_thread(websocket, &"desktop_1234".to_string(), on_ws_receive).await;
         {
             let mut tx2 = TX.lock().await;
             *tx2 = Some(tx);
@@ -488,8 +500,13 @@ async fn old_main(/* shared_tx: Arc<SyncSender<String>> */) -> Result<()> {
         tx.clone()
     };
 
+    let signaling_message = &json!(SignalingMessage {
+        key: "RTCSessionDescription".to_string(),
+        value: payload.to_string(),
+    });
+
     match tx {
-        Some(tx) => match tx.send(payload.to_string()) {
+        Some(tx) => match tx.send(signaling_message.to_string()) {
             Ok(_) => (),
             Err(_) => todo!(),
         },
