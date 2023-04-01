@@ -12,3 +12,7 @@ To install:
 
 Needs: sudo apt install libxdo-dev (enigo)
 Might need: sudo apt install libx11-dev (device_query)
+
+To run cli:
+
+cargo build --example answer && ./target/debug/examples/answer

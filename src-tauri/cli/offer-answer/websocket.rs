@@ -42,10 +42,9 @@ impl WebSocket {
             "id": id
         });
     
-        match write.send(Message::Text(set_id_message.to_string())).await {
-            Err(e) => return Err(e),
-            _ => (),
-        }
+        if let Err(e) = write.send(Message::Text(set_id_message.to_string())).await {
+            return Err(e);
+        };
         
         self.write = Some(write);
         self.read = Some(read);
@@ -125,18 +124,14 @@ async fn main() {
         let mut websocket = WebSocket::new(url);
 
         println!("connecting");
-        match websocket.connect("desktop_1234".to_string()).await {
-            Ok(ok) => ok,
-            Err(_) => continue,
+        if let Err(_) = websocket.connect("desktop_1234".to_string()).await {
+            continue;
         };
         println!("connected");
 
-        match websocket.send("test").await {
-            Ok(_) => (),
-            Err(_) => {
-                println!("Could not send");
-                continue;
-            }
+        if let Err(_) = websocket.send("test").await {
+            println!("Could not send");
+            continue;
         };
 
         let message = match websocket.recv().await {
