@@ -1,5 +1,7 @@
+use futures::{future::BoxFuture, FutureExt};
 use serde_json::json;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::Arc;
+use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use tokio::task::JoinHandle;
 
 use futures_util::stream::SplitSink;
@@ -19,6 +21,77 @@ pub struct WebSocket {
     read: Option<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>,
     url: String,
 }
+
+const WEBSOCKET_MESSAGE_CHECK_DELAY: u64 = 1000;
+
+async fn read_message(websocket: &mut WebSocket) -> Option<String> {
+    let msg = websocket.recv().await;
+
+    if msg.is_none() { // Give more time for wait() to finish...
+        wait(2 * WEBSOCKET_MESSAGE_CHECK_DELAY).await;
+    }
+
+    msg
+}
+
+async fn wait(duration: u64) {
+    sleep(Duration::from_millis(duration)).await;
+}
+
+pub async fn start_send_receive_thread<C>(mut websocket: WebSocket, on_ws_receive: C) -> (tokio::task::JoinHandle<()>, SyncSender<std::string::String>)
+where
+    C: FnOnce(String) -> BoxFuture<'static, ()> + 'static + std::marker::Copy + std::marker::Send,
+    // BoxFuture tip from here: https://www.bitfalter.com/async-closures
+{
+
+    let (send_websocket, rx) : (SyncSender<String>, Receiver<String>) = sync_channel(1);
+
+    let thread_handle = tokio::spawn(async move {
+        println!("websocket thread spawn");
+        loop {
+            let msg = rx.try_iter().next();
+
+            if msg.is_some() {
+                let msg = msg.unwrap();
+                println!("websocket: sending: {}", msg);
+
+                if let Err(err) = websocket.send(&msg).await {
+                    println!("websocket: could not send, {}", err)
+                    // TODO end thread?
+                };
+            }
+            
+            // TODO thread_handle close (call websocket close)
+            // TODO thread_handle connected (sleep 1000 ms?)
+
+            tokio::select! {
+                msg = read_message(&mut websocket) => {
+                    match msg {
+                        None => println!("websocket: received None"),
+                        Some(msg) => {
+                            println!("websocket: received: {}", msg);
+
+
+                            //on_ws_receive(msg).boxed_local(); 
+                            on_ws_receive(msg).await;
+                            //copy.lock().await;
+                        },
+                    }
+                    
+                }
+                // TODO change the duration to longer if connected for a while
+                // or even cut the connection
+                _ = wait(WEBSOCKET_MESSAGE_CHECK_DELAY) => {
+                    println!("timeout")
+                }
+            };
+            //println!("100 ms have elapsed");
+        }
+        println!("websocket thread end");
+    });
+
+    return (thread_handle, send_websocket);
+} 
 
 impl WebSocket {
     pub fn new(url: &str) -> Self {
@@ -147,6 +220,6 @@ async fn main() {
         websocket.close().await;
         break;
 
-        //handle.await.expect("The read task failed.");
+        //thread_handle.await.expect("The read task failed.");
     }
 }

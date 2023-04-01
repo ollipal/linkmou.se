@@ -36,6 +36,7 @@ tokio-util = "0.7.7" # not necessary?
 tokio-tungstenite = "0.18.0"
 futures-util = "0.3.27"
 futures-channel = "0.3.27"
+futures = "0.3.28"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

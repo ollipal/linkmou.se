@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{AppSettings, Arg, Command};
+use futures::FutureExt;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Client, Method, Request, Response, Server, StatusCode};
 use serde_json::json;
@@ -208,102 +209,60 @@ async fn main() {
         };
         println!("websocket: ...connected");
 
-        let (tx, rx) : (SyncSender<String>, Receiver<String>) = sync_channel(1);
+        let on_ws_receive = | msg: String | async move {
+            println!("websocket: received: {}", msg);
+
+            let pc = {
+                let pcm = PEER_CONNECTION_MUTEX.lock().await;
+                pcm.clone().unwrap()
+            };
+
+            // /candidate
+            let candidate = "placeholder".to_string();
+
+            if let Err(err) = pc
+                .add_ice_candidate(RTCIceCandidateInit {
+                    candidate,
+                    ..Default::default()
+                })
+                .await
+            {
+                println!("Could not add_ice_candidate: {}", err);
+            }
+
+            // /sdp
+
+            let sdp_str = "placeholder".to_string();
+
+            let sdp = match serde_json::from_str::<RTCSessionDescription>(&sdp_str) {
+                Ok(s) => s,
+                Err(err) => panic!("{}", err),
+            };
+
+            if let Err(err) = pc.set_remote_description(sdp).await {
+                panic!("{}", err);
+            }
+
+            {   
+                let addr = {
+                    let addr = ADDRESS.lock().await;
+                    addr.clone()
+                };
+
+                let cs = PENDING_CANDIDATES.lock().await;
+                for c in &*cs {
+                    if let Err(err) = signal_candidate(&addr, c).await {
+                        panic!("{}", err);
+                    }
+                }
+            }
+        }.boxed();
+
+        let (handle, tx) = websocket::start_send_receive_thread(websocket, on_ws_receive).await;
         {
             let mut tx2 = TX.lock().await;
             *tx2 = Some(tx);
         }
-
-        let handle = tokio::spawn(async move {
-            println!("websocket thread spawn");
-            loop {
-                let msg = rx.try_iter().next();
-    
-                if msg.is_some() {
-                    let msg = msg.unwrap();
-                    println!("SENDING: {}", msg);
-
-                    // TODO use string
-                    let addr = {
-                        let addr = ADDRESS.lock().await;
-                        addr.clone()
-                    };
-
-                    if let Err(err) = websocket.send(&msg).await {
-                        println!("websocket: could not send, {}", err)
-                        // TODO end thread?
-                    };
-                }
-                
-                // TODO handle close (call websocket close)
-                // TODO handle connected (sleep 1000 ms?)
-
-                tokio::select! {
-                    msg = read_message(&mut websocket) => {
-                        match msg {
-                            None => println!("websocket: received None"),
-                            Some(msg) => {
-                                println!("websocket: received: {}", msg);
-
-                                let pc = {
-                                    let pcm = PEER_CONNECTION_MUTEX.lock().await;
-                                    pcm.clone().unwrap()
-                                };
-
-                                // /candidate
-                                let candidate = "placeholder".to_string();
-
-                                if let Err(err) = pc
-                                    .add_ice_candidate(RTCIceCandidateInit {
-                                        candidate,
-                                        ..Default::default()
-                                    })
-                                    .await
-                                {
-                                    println!("Could not add_ice_candidate: {}", err);
-                                }
-
-                                // /sdp
-
-                                let sdp_str = "placeholder".to_string();
-
-                                let sdp = match serde_json::from_str::<RTCSessionDescription>(&sdp_str) {
-                                    Ok(s) => s,
-                                    Err(err) => panic!("{}", err),
-                                };
-                    
-                                if let Err(err) = pc.set_remote_description(sdp).await {
-                                    panic!("{}", err);
-                                }
-                    
-                                {   
-                                    let addr = {
-                                        let addr = ADDRESS.lock().await;
-                                        addr.clone()
-                                    };
-
-                                    let cs = PENDING_CANDIDATES.lock().await;
-                                    for c in &*cs {
-                                        if let Err(err) = signal_candidate(&addr, c).await {
-                                            panic!("{}", err);
-                                        }
-                                    }
-                                }
-
-                            },
-                        }
-                        
-                    }
-                    // TODO change the duration to longer if connected for a while
-                    // or even cut the connection
-                    _ = wait(WEBSOCKET_MESSAGE_CHECK_DELAY) => {
-                        println!("timeout")
-                    }
-                };
-                //println!("100 ms have elapsed");
-            }
-            println!("websocket thread end");
-        });
 
         old_main().await.unwrap();
 
