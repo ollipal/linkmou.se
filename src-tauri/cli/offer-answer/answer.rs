@@ -40,6 +40,13 @@ struct SignalingMessage {
     value: String,
 }
 
+#[derive(Deserialize)]
+struct Event {
+    name: String,
+    value1: serde_json::Number,
+    value2: serde_json::Number,
+}
+
 #[macro_use]
 extern crate lazy_static;
 
@@ -182,17 +189,19 @@ async fn main() {
                 }
             } else if signaling_message.key == "RTCIceCandidate" {
                 println!("CANDIDATE");
-                let candidate = &signaling_message.value;
+                let candidate_str = &signaling_message.value;
+
+                let candidate = match serde_json::from_str::<RTCIceCandidateInit>(&candidate_str) {
+                    Ok(s) => s,
+                    Err(err) => panic!("{}", err),
+                };
 
                 if let Err(err) = pc
-                    .add_ice_candidate(RTCIceCandidateInit {
-                        candidate: candidate.to_string(),
-                        ..Default::default()
-                    })
+                    .add_ice_candidate(candidate)
                     .await
                 {
                     println!("Could not add_ice_candidate: {}", err);
-                }    
+                }  
             } else {
                 println!("Unknown SignalingMessage.key: {}", signaling_message.key);
             }
@@ -401,10 +410,19 @@ async fn old_main() -> Result<String> {
 
             // Register text message handling
             d.on_message(Box::new(move |msg: DataChannelMessage| {
-               println!("Message received");
-               let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-               println!("Message from DataChannel '{d_label}': '{msg_str}'");
-               Box::pin(async{})
+                println!("Message received");
+                let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
+
+                let event = match serde_json::from_str::<Event>(&msg_str) {
+                    Ok(s) => s,
+                    Err(err) => {
+                        println!("{}", err);
+                        return Box::pin(async{})
+                    },
+                };
+
+                println!("Message from DataChannel '{d_label}': '{msg_str}'");
+                Box::pin(async{})
             }));
 
             d.on_close(Box::new(move || {
