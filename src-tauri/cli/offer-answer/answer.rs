@@ -20,7 +20,6 @@ use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit}
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
 use webrtc::peer_connection::configuration::RTCConfiguration;
-use webrtc::peer_connection::math_rand_alpha;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
@@ -33,7 +32,7 @@ use crate::websocket::{WebSocket, CLOSE};
 const URL: &str = "wss://browserkvm-backend.onrender.com:443";
 const SLEEP_ADD_MS: u64 = 500;
 const SLEEP_MAX_MS: u64 = 5000;
-const CONNECTION_STABLE_TIMEOUT: u64 = 15000;
+const PING_INTERVAL: u64 = 70;
 
 #[derive(Serialize, Deserialize)]
 struct SignalingMessage {
@@ -41,11 +40,11 @@ struct SignalingMessage {
     value: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct Event {
     name: String,
-    value1: serde_json::Number,
-    value2: serde_json::Number,
+    value1: Option<serde_json::Number>,
+    value2: Option<serde_json::Number>,
 }
 
 #[macro_use]
@@ -56,7 +55,7 @@ lazy_static! {
         Arc::new(Mutex::new(None));
     static ref PENDING_CANDIDATES: Arc<Mutex<Vec<RTCIceCandidate>>> = Arc::new(Mutex::new(vec![]));
     static ref TX: Arc<Mutex<Option<SyncSender<String>>>> = Arc::new(Mutex::new(None));
-    static ref ENIGO: Arc<Mutex<Option<Enigo>>> = Arc::new(Mutex::new(None));
+    static ref ENIGO: Arc<std::sync::Mutex<Option<Enigo>>> = Arc::new(std::sync::Mutex::new(None));
 }
 
 async fn signal_candidate(c: &RTCIceCandidate) -> Result<()> {
@@ -97,7 +96,7 @@ async fn main() {
     let mut tries: u64 = 0;
 
     {
-        let mut enigo = ENIGO.lock().await;
+        let mut enigo = ENIGO.lock().unwrap();
         *enigo = Some(Enigo::new());
     }
     loop {
@@ -391,6 +390,12 @@ async fn old_main() -> Result<String> {
 
         let done_tx2_clone = done_tx2.clone();
 
+        let ping = json!(Event {
+            name: "ping".to_string(),
+            value1: None,
+            value2: None,
+        }).to_string();
+
         Box::pin(async move{
             // Register channel opening handling
             let d2 =  Arc::clone(&d);
@@ -399,19 +404,19 @@ async fn old_main() -> Result<String> {
             d.on_open(Box::new(move || {
                 println!("Data channel '{d_label2}'-'{d_id2}' open. Random messages will now be sent to any connected DataChannels every 5 seconds");
                 Box::pin(async move {
-                    /* let mut result = Result::<usize>::Ok(0);
+                    let mut result = Result::<usize>::Ok(0);
                     while result.is_ok() {
-                        let timeout = tokio::time::sleep(Duration::from_secs(1));
+                        // Fix lag spikes: https://stackoverflow.com/a/37144680
+                        let timeout = tokio::time::sleep(Duration::from_millis(PING_INTERVAL));
                         tokio::pin!(timeout);
 
                         tokio::select! {
                             _ = timeout.as_mut() =>{
-                                let message = math_rand_alpha(15);
-                                println!("Sending '{message}'");
-                                result = d2.send_text(message).await.map_err(Into::into);
+                                //println!("Sending PING");
+                                result = d2.send_text(ping.clone()).await.map_err(Into::into);
                             }
                         };
-                    } */
+                    }
                 })
             }));
 
@@ -421,25 +426,30 @@ async fn old_main() -> Result<String> {
                 let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
 
                 let event = match serde_json::from_str::<Event>(&msg_str) {
-                    Ok(s) => s,
+                    Ok(event) => event,
                     Err(err) => {
                         println!("{}", err);
                         return Box::pin(async{})
                     },
                 };
 
-                //println!("Message from DataChannel '{d_label}': '{msg_str}'");
-                Box::pin(async move {
-                    //println!("HERE {}", event.value1.as_i64().unwrap());
-                    let mut enigo = {
-                        let enigo = ENIGO.lock().await;
-                        enigo
-                    };
+                if event.name == "mousemove" {
+                    //println!("Mousemove");
+                    let mut enigo = ENIGO.lock().unwrap();
                     enigo.as_mut().unwrap().mouse_move_relative(
-                        i32::try_from(event.value1.as_i64().unwrap()).unwrap(),
-                        i32::try_from(event.value2.as_i64().unwrap()).unwrap()
+                        i32::try_from(event.value1.unwrap().as_i64().unwrap()).unwrap(),
+                        i32::try_from(event.value2.unwrap().as_i64().unwrap()).unwrap()
                     );
-                })
+                } else if event.name == "pong" {
+                    //println!("received PONG");
+                } else {
+                    println!("Unknown event.name: {}", event.name);
+                }
+
+
+
+                //println!("Message from DataChannel '{d_label}': '{msg_str}'");
+                Box::pin(async {})
             }));
 
             d.on_close(Box::new(move || {

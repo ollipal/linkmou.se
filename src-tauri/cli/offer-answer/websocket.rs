@@ -30,7 +30,7 @@ pub static CLOSE: &str = "CLOSE";
 
 const WEBSOCKET_MESSAGE_CHECK_DELAY: u64 = 1000;
 const WEBSOCKET_MESSAGE_BUFFER_SIZE: usize = 250;
-const WEBRTC_CONNECTED_DELAY: u64 = 1000; // Allow last candidates to arrive
+const WEBRTC_CONNECTED_DELAY: u64 = 1000; // Allow last candidates to arrive before ws disconnect
 
 impl WebSocket {
     pub fn new(url: &str) -> Self {
