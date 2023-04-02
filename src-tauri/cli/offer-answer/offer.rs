@@ -137,13 +137,15 @@ async fn main() {
                 println!("SDP END");
             } else if signaling_message.key == "RTCIceCandidate" {
                 println!("CANDIDATE");
-                let candidate = &signaling_message.value;
+                let candidate_str = &signaling_message.value;
+
+                let candidate = match serde_json::from_str::<RTCIceCandidateInit>(&candidate_str) {
+                    Ok(s) => s,
+                    Err(err) => panic!("{}", err),
+                };
 
                 if let Err(err) = pc
-                    .add_ice_candidate(RTCIceCandidateInit {
-                        candidate: candidate.to_string(),
-                        ..Default::default()
-                    })
+                    .add_ice_candidate(candidate)
                     .await
                 {
                     println!("Could not add_ice_candidate: {}", err);

@@ -53,9 +53,14 @@ lazy_static! {
 async fn signal_candidate(c: &RTCIceCandidate) -> Result<()> {
     match c.to_json() {
         Ok(j) => {
+            let payload = match serde_json::to_string(&j) {
+                Ok(p) => p,
+                Err(err) => panic!("{}", err),
+            };
+
             let signaling_message = &json!(SignalingMessage {
                 key: "RTCIceCandidate".to_string(),
-                value: j.candidate.to_string()
+                value: payload,
             });
 
             let tx = {
@@ -360,11 +365,15 @@ async fn old_main() -> Result<String> {
         Box::pin(async {})
     }));
 
+    let (done_tx2, mut done_rx2) = tokio::sync::mpsc::channel::<()>(1);
+
     // Register data channel creation handling
     peer_connection.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
         let d_label = d.label().to_owned();
         let d_id = d.id();
         println!("New DataChannel {d_label} {d_id}");
+
+        let done_tx2_clone = done_tx2.clone();
 
         Box::pin(async move{
             // Register channel opening handling
@@ -376,7 +385,7 @@ async fn old_main() -> Result<String> {
                 Box::pin(async move {
                     let mut result = Result::<usize>::Ok(0);
                     while result.is_ok() {
-                        let timeout = tokio::time::sleep(Duration::from_secs(5));
+                        let timeout = tokio::time::sleep(Duration::from_secs(1));
                         tokio::pin!(timeout);
 
                         tokio::select! {
@@ -392,16 +401,27 @@ async fn old_main() -> Result<String> {
 
             // Register text message handling
             d.on_message(Box::new(move |msg: DataChannelMessage| {
+               println!("Message received");
                let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
                println!("Message from DataChannel '{d_label}': '{msg_str}'");
                Box::pin(async{})
-           }));
+            }));
+
+            d.on_close(Box::new(move || {
+                println!("DC CLOSE");
+                let _ = done_tx2_clone.try_send(());
+                Box::pin(async{})
+             }));
         })
     }));
 
     println!("Press ctrl-c to stop");
     let result = tokio::select! {
         _ = done_rx.recv() => {
+            println!("received done signal!");
+            "DISCONNECT"
+        }
+        _ = done_rx2.recv() => {
             println!("received done signal!");
             "DISCONNECT"
         }
