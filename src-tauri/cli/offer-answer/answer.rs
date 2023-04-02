@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{AppSettings, Arg, Command};
+use enigo::{Enigo, MouseControllable};
 use futures::FutureExt;
 use serde::{Serialize, Deserialize};
 use std::io::Write;
@@ -28,8 +29,8 @@ use std::clone::Clone;
 mod websocket;
 use crate::websocket::{WebSocket, CLOSE};
 
-const URL: &str = "ws://localhost:3001";
-//const URL: &str = "wss://browserkvm-backend.onrender.com:443";
+//const URL: &str = "ws://localhost:3001";
+const URL: &str = "wss://browserkvm-backend.onrender.com:443";
 const SLEEP_ADD_MS: u64 = 500;
 const SLEEP_MAX_MS: u64 = 5000;
 const CONNECTION_STABLE_TIMEOUT: u64 = 15000;
@@ -55,6 +56,7 @@ lazy_static! {
         Arc::new(Mutex::new(None));
     static ref PENDING_CANDIDATES: Arc<Mutex<Vec<RTCIceCandidate>>> = Arc::new(Mutex::new(vec![]));
     static ref TX: Arc<Mutex<Option<SyncSender<String>>>> = Arc::new(Mutex::new(None));
+    static ref ENIGO: Arc<Mutex<Option<Enigo>>> = Arc::new(Mutex::new(None));
 }
 
 async fn signal_candidate(c: &RTCIceCandidate) -> Result<()> {
@@ -93,6 +95,11 @@ async fn signal_candidate(c: &RTCIceCandidate) -> Result<()> {
 async fn main() {
     //let background_loop_handler = thread::spawn(|| {
     let mut tries: u64 = 0;
+
+    {
+        let mut enigo = ENIGO.lock().await;
+        *enigo = Some(Enigo::new());
+    }
     loop {
         // Print reconnections, potentially sleep
         println!("Trying to connect {}...", tries);
@@ -392,7 +399,7 @@ async fn old_main() -> Result<String> {
             d.on_open(Box::new(move || {
                 println!("Data channel '{d_label2}'-'{d_id2}' open. Random messages will now be sent to any connected DataChannels every 5 seconds");
                 Box::pin(async move {
-                    let mut result = Result::<usize>::Ok(0);
+                    /* let mut result = Result::<usize>::Ok(0);
                     while result.is_ok() {
                         let timeout = tokio::time::sleep(Duration::from_secs(1));
                         tokio::pin!(timeout);
@@ -404,13 +411,13 @@ async fn old_main() -> Result<String> {
                                 result = d2.send_text(message).await.map_err(Into::into);
                             }
                         };
-                    }
+                    } */
                 })
             }));
 
             // Register text message handling
             d.on_message(Box::new(move |msg: DataChannelMessage| {
-                println!("Message received");
+                //println!("Message received");
                 let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
 
                 let event = match serde_json::from_str::<Event>(&msg_str) {
@@ -421,8 +428,18 @@ async fn old_main() -> Result<String> {
                     },
                 };
 
-                println!("Message from DataChannel '{d_label}': '{msg_str}'");
-                Box::pin(async{})
+                //println!("Message from DataChannel '{d_label}': '{msg_str}'");
+                Box::pin(async move {
+                    //println!("HERE {}", event.value1.as_i64().unwrap());
+                    let mut enigo = {
+                        let enigo = ENIGO.lock().await;
+                        enigo
+                    };
+                    enigo.as_mut().unwrap().mouse_move_relative(
+                        i32::try_from(event.value1.as_i64().unwrap()).unwrap(),
+                        i32::try_from(event.value2.as_i64().unwrap()).unwrap()
+                    );
+                })
             }));
 
             d.on_close(Box::new(move || {
