@@ -390,21 +390,21 @@ async fn old_main() -> Result<String> {
 
         let done_tx2_clone = done_tx2.clone();
 
-        let ping = json!(Event {
+        /* let ping = json!(Event {
             name: "ping".to_string(),
             value1: None,
             value2: None,
-        }).to_string();
+        }).to_string(); */
 
         Box::pin(async move{
             // Register channel opening handling
-            let d2 =  Arc::clone(&d);
+            //let d2 =  Arc::clone(&d);
             let d_label2 = d_label.clone();
             let d_id2 = d_id;
             d.on_open(Box::new(move || {
                 println!("Data channel '{d_label2}'-'{d_id2}' open. Random messages will now be sent to any connected DataChannels every 5 seconds");
                 Box::pin(async move {
-                    let mut result = Result::<usize>::Ok(0);
+                    /* let mut result = Result::<usize>::Ok(0);
                     while result.is_ok() {
                         // Fix lag spikes: https://stackoverflow.com/a/37144680
                         let timeout = tokio::time::sleep(Duration::from_millis(PING_INTERVAL));
@@ -416,7 +416,7 @@ async fn old_main() -> Result<String> {
                                 result = d2.send_text(ping.clone()).await.map_err(Into::into);
                             }
                         };
-                    }
+                    } */
                 })
             }));
 
@@ -425,25 +425,29 @@ async fn old_main() -> Result<String> {
                 //println!("Message received");
                 let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
 
-                let event = match serde_json::from_str::<Event>(&msg_str) {
+                /* let event = match serde_json::from_str::<Event>(&msg_str) {
                     Ok(event) => event,
                     Err(err) => {
                         println!("{}", err);
                         return Box::pin(async{})
                     },
-                };
+                }; */
 
-                if event.name == "mousemove" {
-                    //println!("Mousemove");
+                let mut values = msg_str.split(",");
+
+                let name = values.next().unwrap();
+
+                if name == "mousemove" {
+                    println!("Mousemove");
                     let mut enigo = ENIGO.lock().unwrap();
                     enigo.as_mut().unwrap().mouse_move_relative(
-                        i32::try_from(event.value1.unwrap().as_i64().unwrap()).unwrap(),
-                        i32::try_from(event.value2.unwrap().as_i64().unwrap()).unwrap()
+                        values.next().unwrap().parse::<i32>().unwrap(),
+                        values.next().unwrap().parse::<i32>().unwrap(),
                     );
-                } else if event.name == "pong" {
+                } else if name == "pong" {
                     //println!("received PONG");
                 } else {
-                    println!("Unknown event.name: {}", event.name);
+                    println!("Unknown event.name: {}", name);
                 }
 
 
