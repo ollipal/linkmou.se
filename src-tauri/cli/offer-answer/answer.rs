@@ -2,9 +2,11 @@ use anyhow::Result;
 use clap::{AppSettings, Arg, Command};
 use enigo::{Enigo, MouseControllable};
 use futures::FutureExt;
+use lazy_static::__Deref;
 use serde::{Serialize, Deserialize};
 use std::io::Write;
 use std::sync::mpsc::SyncSender;
+use std::time::{SystemTime, UNIX_EPOCH};
 use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use serde_json::json;
 use tokio::time::{sleep, Duration};
@@ -28,11 +30,13 @@ use std::clone::Clone;
 mod websocket;
 use crate::websocket::{WebSocket, CLOSE};
 
+const DOUBLE_MOUSE_POINTS : bool = true;
+
 //const URL: &str = "ws://localhost:3001";
 const URL: &str = "wss://browserkvm-backend.onrender.com:443";
 const SLEEP_ADD_MS: u64 = 500;
 const SLEEP_MAX_MS: u64 = 5000;
-const PING_INTERVAL: u64 = 70;
+//const PING_INTERVAL: u64 = 70;
 
 #[derive(Serialize, Deserialize)]
 struct SignalingMessage {
@@ -40,15 +44,28 @@ struct SignalingMessage {
     value: String,
 }
 
-#[derive(Serialize, Deserialize)]
+/* #[derive(Serialize, Deserialize)]
 struct Event {
     name: String,
     value1: Option<serde_json::Number>,
     value2: Option<serde_json::Number>,
+} */
+
+struct MouseOffset {
+    x: i32,
+    y: i32,
 }
+
 
 #[macro_use]
 extern crate lazy_static;
+
+fn get_epoch_nanos() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+}
 
 lazy_static! {
     static ref PEER_CONNECTION_MUTEX: Arc<Mutex<Option<Arc<RTCPeerConnection>>>> =
@@ -56,6 +73,8 @@ lazy_static! {
     static ref PENDING_CANDIDATES: Arc<Mutex<Vec<RTCIceCandidate>>> = Arc::new(Mutex::new(vec![]));
     static ref TX: Arc<Mutex<Option<SyncSender<String>>>> = Arc::new(Mutex::new(None));
     static ref ENIGO: Arc<std::sync::Mutex<Option<Enigo>>> = Arc::new(std::sync::Mutex::new(None));
+    static ref MOUSE_OFFSET: Arc<std::sync::Mutex<MouseOffset>> = Arc::new(std::sync::Mutex::new(MouseOffset { x: 0, y: 0 }));
+    static ref MOUSE_LAST_NANO: Arc<std::sync::Mutex<u128>> = Arc::new(std::sync::Mutex::new(get_epoch_nanos()));
 }
 
 async fn signal_candidate(c: &RTCIceCandidate) -> Result<()> {
@@ -424,36 +443,66 @@ async fn old_main() -> Result<String> {
             d.on_message(Box::new(move |msg: DataChannelMessage| {
                 //println!("Message received");
                 let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-
-                /* let event = match serde_json::from_str::<Event>(&msg_str) {
-                    Ok(event) => event,
-                    Err(err) => {
-                        println!("{}", err);
-                        return Box::pin(async{})
-                    },
-                }; */
-
                 let mut values = msg_str.split(",");
+                let name = values.next().unwrap().to_string();
 
-                let name = values.next().unwrap();
+                if name == "mousemove".to_string() { // .to_string()?
+                    // TODO WAIT FOR A LOCK HERE
+                    // TODO LOCK HERE
 
-                if name == "mousemove" {
-                    println!("Mousemove");
-                    let mut enigo = ENIGO.lock().unwrap();
-                    enigo.as_mut().unwrap().mouse_move_relative(
-                        values.next().unwrap().parse::<i32>().unwrap(),
-                        values.next().unwrap().parse::<i32>().unwrap(),
-                    );
-                } else if name == "pong" {
+                    let x = values.next().unwrap().parse::<i32>().unwrap();
+                    let y = values.next().unwrap().parse::<i32>().unwrap();
+
+                    if DOUBLE_MOUSE_POINTS {
+                        let offset_x : i32;
+                        let offset_y : i32;
+                        {
+                            let mut mouse_offset = MOUSE_OFFSET.lock().unwrap();
+                            //println!("x: {} offset.x: {}", x, mouse_offset.x);
+                            offset_x = x - mouse_offset.x;
+                            offset_y = y - mouse_offset.y;
+
+                            mouse_offset.x = x / 2;
+                            mouse_offset.y = y / 2;
+                        }
+                        let mut enigo = ENIGO.lock().unwrap();
+                        enigo.as_mut().unwrap().mouse_move_relative(offset_x, offset_y);
+
+
+                        {
+                            let mut mouse_last_nano_ref = MOUSE_LAST_NANO.lock().unwrap();
+                            let mouse_last_nano = mouse_last_nano_ref.deref();
+                            let now = get_epoch_nanos();
+                            let diff = now - mouse_last_nano;
+                            *mouse_last_nano_ref = now;
+                            //println!("Diff in nanos: {}", diff);
+                        }
+                    } else {
+                        let mut enigo = ENIGO.lock().unwrap();
+                        enigo.as_mut().unwrap().mouse_move_relative(x, y);
+                    }
+                    
+
+                } else if name == "pong".to_string() {
                     //println!("received PONG");
                 } else {
                     println!("Unknown event.name: {}", name);
                 }
-
-
+                
 
                 //println!("Message from DataChannel '{d_label}': '{msg_str}'");
-                Box::pin(async {})
+                Box::pin(async move {
+                    if DOUBLE_MOUSE_POINTS && name == "mousemove" {
+                        // TODO skip sleep, if a lot of time since last (might be a lag spike)
+                        sleep(Duration::from_nanos(16818818 / 2)).await;
+                        //println!("Mousemove2");
+                        let mouse_offset = MOUSE_OFFSET.lock().unwrap();
+                        let mut enigo = ENIGO.lock().unwrap();
+                        enigo.as_mut().unwrap().mouse_move_relative(mouse_offset.x, mouse_offset.y);
+                    }
+
+                    // TODO RELEASE HERE (might not be locked)
+                })
             }));
 
             d.on_close(Box::new(move || {
