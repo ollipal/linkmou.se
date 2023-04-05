@@ -26,7 +26,8 @@ struct WebSocketMessage {
     content: String,
 }
 
-pub static CLOSE: &str = "CLOSE";
+pub static CLOSE: &str = "CLOSE"; // NOTE: this can cause closing getting stuck, if just before CLOSE_IMMEDIATE
+pub static CLOSE_IMMEDIATE: &str = "CLOSE_IMMEDIATE";
 
 const WEBSOCKET_MESSAGE_CHECK_DELAY: u64 = 1000;
 const WEBSOCKET_MESSAGE_BUFFER_SIZE: usize = 250;
@@ -181,7 +182,11 @@ where
 
                 if msg == CLOSE.to_string() {
                     close = true;
+                    // TODO THIS CAN GET STUCK IF "CLOSE_IMMEDIATE" DURING SLEEP
                     sleep(Duration::from_millis(WEBRTC_CONNECTED_DELAY)).await;
+                    continue;
+                } else if msg == CLOSE_IMMEDIATE.to_string() {
+                    close = true;
                     continue;
                 }
 

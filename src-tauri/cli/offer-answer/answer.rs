@@ -28,9 +28,8 @@ use webrtc::peer_connection::RTCPeerConnection;
 use std::clone::Clone;
 
 mod websocket;
-use crate::websocket::{WebSocket, CLOSE};
+use crate::websocket::{WebSocket, CLOSE, CLOSE_IMMEDIATE};
 
-const DOUBLE_MOUSE_POINTS : bool = true;
 const MOUSE_ROLLING_AVG_MULT : f64 = 0.05;
 
 //const URL: &str = "ws://localhost:3001";
@@ -44,13 +43,6 @@ struct SignalingMessage {
     key: String,
     value: String,
 }
-
-/* #[derive(Serialize, Deserialize)]
-struct Event {
-    name: String,
-    value1: Option<serde_json::Number>,
-    value2: Option<serde_json::Number>,
-} */
 
 struct MouseOffset {
     x: i32,
@@ -452,81 +444,57 @@ async fn old_main() -> Result<String> {
                 let mut offset_y : i32 = 0;
 
                 if name == "mousemove".to_string() { // .to_string()?
-                    // TODO WAIT FOR A LOCK HERE
-                    // TODO LOCK HERE
-
                     let x = values.next().unwrap().parse::<i32>().unwrap();
                     let y = values.next().unwrap().parse::<i32>().unwrap();
-
-                    if DOUBLE_MOUSE_POINTS {
-
-                        {
-                            let mut mouse_offset = MOUSE_OFFSET.lock().unwrap();
-                            //println!("x: {} offset.x: {}", x, mouse_offset.x);
-                            offset_x = x - mouse_offset.x;
-                            offset_y = y - mouse_offset.y;
-
-                            mouse_offset.x = x / 2;
-                            mouse_offset.y = y / 2;
-                        }
+                    {
+                        let mut mouse_offset = MOUSE_OFFSET.lock().unwrap();
+                        offset_x = x - mouse_offset.x;
+                        offset_y = y - mouse_offset.y;
+                        mouse_offset.x = x / 2;
+                        mouse_offset.y = y / 2;
+                    }
+                    {
                         let mut enigo = ENIGO.lock().unwrap();
                         enigo.as_mut().unwrap().mouse_move_relative(offset_x, offset_y);
-
-
-                        {
-                            let mut mouse_last_nano_ref = MOUSE_LAST_NANO.lock().unwrap();
-                            let mouse_last_nano = mouse_last_nano_ref.deref();
-                            
-                            let now = get_epoch_nanos();
-                            let diff = match mouse_last_nano {
-                                Some(mouse_last_nano) => Some(now - mouse_last_nano),
-                                None => None,
-                            };
-                            *mouse_last_nano_ref = Some(now);
-                            
-
-
-                            //println!("diff: {}", diff);
-                            skip_sleep = match diff {
-                                Some(diff) => {
-                                    let value: f64;
-                                    {
-                                        let mut mouse_rolling_avg_interval_ref = MOUSE_ROLLING_AVG_INTERVAL.lock().unwrap();
-                                        *mouse_rolling_avg_interval_ref = ((*mouse_rolling_avg_interval_ref.deref() as f64) * (1.0 - MOUSE_ROLLING_AVG_MULT) + (diff as f64) * MOUSE_ROLLING_AVG_MULT) as i64 as u128;
-                                        println!("diff: {}", mouse_rolling_avg_interval_ref);
-                                    
-
-                                        let diff64: u64 = diff.try_into().unwrap();
-                                        //let target: u64 = 16818818;
-            
-                                        value = diff64 as f64 / *mouse_rolling_avg_interval_ref.deref() as f64;
-                                    }
-
-                                    if value > 1.15 {
-                                        println!("TOO SLOW: {}", value);
-                                        true
-                                    } else if value < 0.70 {
-                                        println!("TOO FAST: {}", value);
-                                        true
-                                    } else {
-                                        false
-                                    }
-                                },
-                                None => false,
-                            };
-
-                            
-                            
-                            
-
-
-                        }
-                    } else {
-                        let mut enigo = ENIGO.lock().unwrap();
-                        enigo.as_mut().unwrap().mouse_move_relative(x, y);
                     }
-                    
 
+                    let now = get_epoch_nanos();
+                    let diff;
+                    
+                    {
+                        let mut mouse_last_nano_ref = MOUSE_LAST_NANO.lock().unwrap();
+                        let mouse_last_nano = mouse_last_nano_ref.deref();
+                        
+                        diff = match mouse_last_nano {
+                            Some(mouse_last_nano) => Some(now - mouse_last_nano),
+                            None => None,
+                        };
+                        *mouse_last_nano_ref = Some(now);
+                    }
+
+                    skip_sleep = match diff {
+                        Some(diff) => {
+                            let value: f64;
+                            {
+                                let mut mouse_rolling_avg_interval_ref = MOUSE_ROLLING_AVG_INTERVAL.lock().unwrap();
+                                *mouse_rolling_avg_interval_ref = ((*mouse_rolling_avg_interval_ref.deref() as f64) * (1.0 - MOUSE_ROLLING_AVG_MULT) + (diff as f64) * MOUSE_ROLLING_AVG_MULT) as i64 as u128;
+                                println!("diff: {}", mouse_rolling_avg_interval_ref);
+                                let diff64: u64 = diff.try_into().unwrap();
+                                value = diff64 as f64 / *mouse_rolling_avg_interval_ref.deref() as f64;
+                            }
+
+                            if value > 1.15 {
+                                println!("TOO SLOW: {}", value);
+                                true
+                            } else if value < 0.70 {
+                                println!("TOO FAST: {}", value);
+                                true
+                            } else {
+                                false
+                            }
+                        },
+                        None => false,
+                    };
                 } else if name == "mouseidle".to_string() {
                     println!("mouseidle");
                     {
@@ -538,24 +506,24 @@ async fn old_main() -> Result<String> {
                     println!("Unknown event.name: {}", name);
                 }
                 
-                let skip = true;
                 //println!("Message from DataChannel '{d_label}': '{msg_str}'");
                 Box::pin(async move {
-                    if DOUBLE_MOUSE_POINTS && name == "mousemove"  && skip{
-                        //let mouse_skip_sleep = MOUSE_SKIP_SLEEP.lock().unwrap();
-
-                        // TODO skip sleep, if a lot of time since last (might be a lag spike)
+                    if name == "mousemove"{
                         if !skip_sleep {
-                            sleep(Duration::from_nanos(16818818 / 2)).await;
+                            let mouse_rolling_avg = {
+                                let mouse_rolling_avg_interval_ref = MOUSE_ROLLING_AVG_INTERVAL.lock().unwrap();
+                                *mouse_rolling_avg_interval_ref.deref() as u64
+                            };
+                            sleep(Duration::from_nanos(mouse_rolling_avg / 2)).await;
                         } else {
                             println!("sleep skipped");
-                            //return; // NOTE!!!
                         }
-                        let mut enigo = ENIGO.lock().unwrap();
-                        enigo.as_mut().unwrap().mouse_move_relative(offset_x, offset_y);
-                    }
 
-                    // TODO RELEASE HERE (might not be locked)
+                        {
+                            let mut enigo = ENIGO.lock().unwrap();
+                            enigo.as_mut().unwrap().mouse_move_relative(offset_x, offset_y);
+                        }
+                    }
                 })
             }));
 
@@ -563,7 +531,7 @@ async fn old_main() -> Result<String> {
                 println!("DC CLOSE");
                 let _ = done_tx2_clone.try_send(());
                 Box::pin(async{})
-             }));
+            }));
         })
     }));
 
@@ -578,12 +546,10 @@ async fn old_main() -> Result<String> {
             "DISCONNECT"
         }
         _ = tokio::signal::ctrl_c() => {
-            println!();
+            println!("CTRLC");
             "CTRLC"
         }
     };
-
-    peer_connection.close().await?;
 
     let tx = {
         let tx = TX.lock().await;
@@ -591,12 +557,16 @@ async fn old_main() -> Result<String> {
     };
     
     match tx {
-        Some(tx) => match tx.send(CLOSE.to_string()) {
+        Some(tx) => match tx.send(CLOSE_IMMEDIATE.to_string()) {
             Ok(_) => (),
             Err(_) => println!("Could not send CLOSE"),
         },
         None => println!("Could not send CLOSE"),
     }
+
+    println!("closing peer");
+    peer_connection.close().await?;
+    println!("closed peer");
 
     Ok(result.to_string())
 }
