@@ -422,7 +422,7 @@ async fn old_main() -> Result<String> {
             let d_id2 = d_id;
             d.on_open(Box::new(move || {
                 println!("Data channel '{d_label2}'-'{d_id2}' open. Random messages will now be sent to any connected DataChannels every 5 seconds");
-                Box::pin(async move {
+                Box::pin(async /* move */ {
                     /* let mut result = Result::<usize>::Ok(0);
                     while result.is_ok() {
                         // Fix lag spikes: https://stackoverflow.com/a/37144680
@@ -445,6 +445,9 @@ async fn old_main() -> Result<String> {
                 let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
                 let mut values = msg_str.split(",");
                 let name = values.next().unwrap().to_string();
+                let mut skip_sleep = false;
+                let mut offset_x : i32 = 0;
+                let mut offset_y : i32 = 0;
 
                 if name == "mousemove".to_string() { // .to_string()?
                     // TODO WAIT FOR A LOCK HERE
@@ -454,8 +457,7 @@ async fn old_main() -> Result<String> {
                     let y = values.next().unwrap().parse::<i32>().unwrap();
 
                     if DOUBLE_MOUSE_POINTS {
-                        let offset_x : i32;
-                        let offset_y : i32;
+
                         {
                             let mut mouse_offset = MOUSE_OFFSET.lock().unwrap();
                             //println!("x: {} offset.x: {}", x, mouse_offset.x);
@@ -475,7 +477,21 @@ async fn old_main() -> Result<String> {
                             let now = get_epoch_nanos();
                             let diff = now - mouse_last_nano;
                             *mouse_last_nano_ref = now;
-                            //println!("Diff in nanos: {}", diff);
+
+                            let diff64: u64 = diff.try_into().unwrap();
+                            let target: u64 = 16818818;
+
+                            let value = diff64 as f64 / target as f64;
+                            
+                            if value > 1.15 {
+                                println!("TOO SLOW: {}", value);
+                                skip_sleep = true;
+                            } else if value < 0.70 {
+                                println!("TOO FAST: {}", value);
+                                skip_sleep = true;
+                            } else {
+                                skip_sleep= false;
+                            }
                         }
                     } else {
                         let mut enigo = ENIGO.lock().unwrap();
@@ -486,19 +502,25 @@ async fn old_main() -> Result<String> {
                 } else if name == "pong".to_string() {
                     //println!("received PONG");
                 } else {
-                    println!("Unknown event.name: {}", name);
+                    // NOTE
+                    //println!("Unknown event.name: {}", name);
                 }
                 
-
+                let skip = true;
                 //println!("Message from DataChannel '{d_label}': '{msg_str}'");
                 Box::pin(async move {
-                    if DOUBLE_MOUSE_POINTS && name == "mousemove" {
+                    if DOUBLE_MOUSE_POINTS && name == "mousemove"  && skip{
+                        //let mouse_skip_sleep = MOUSE_SKIP_SLEEP.lock().unwrap();
+
                         // TODO skip sleep, if a lot of time since last (might be a lag spike)
-                        sleep(Duration::from_nanos(16818818 / 2)).await;
-                        //println!("Mousemove2");
-                        let mouse_offset = MOUSE_OFFSET.lock().unwrap();
+                        if !skip_sleep {
+                            sleep(Duration::from_nanos(16818818 / 2)).await;
+                        } else {
+                            println!("sleep skipped");
+                            //return; // NOTE!!!
+                        }
                         let mut enigo = ENIGO.lock().unwrap();
-                        enigo.as_mut().unwrap().mouse_move_relative(mouse_offset.x, mouse_offset.y);
+                        enigo.as_mut().unwrap().mouse_move_relative(offset_x, offset_y);
                     }
 
                     // TODO RELEASE HERE (might not be locked)
