@@ -31,6 +31,7 @@ mod websocket;
 use crate::websocket::{WebSocket, CLOSE};
 
 const DOUBLE_MOUSE_POINTS : bool = true;
+const MOUSE_ROLLING_AVG_MULT : f64 = 0.05;
 
 //const URL: &str = "ws://localhost:3001";
 const URL: &str = "wss://browserkvm-backend.onrender.com:443";
@@ -74,7 +75,8 @@ lazy_static! {
     static ref TX: Arc<Mutex<Option<SyncSender<String>>>> = Arc::new(Mutex::new(None));
     static ref ENIGO: Arc<std::sync::Mutex<Option<Enigo>>> = Arc::new(std::sync::Mutex::new(None));
     static ref MOUSE_OFFSET: Arc<std::sync::Mutex<MouseOffset>> = Arc::new(std::sync::Mutex::new(MouseOffset { x: 0, y: 0 }));
-    static ref MOUSE_LAST_NANO: Arc<std::sync::Mutex<u128>> = Arc::new(std::sync::Mutex::new(get_epoch_nanos()));
+    static ref MOUSE_LAST_NANO: Arc<std::sync::Mutex<Option<u128>>> = Arc::new(std::sync::Mutex::new(None));
+    static ref MOUSE_ROLLING_AVG_INTERVAL: Arc<std::sync::Mutex<u128>> = Arc::new(std::sync::Mutex::new(1000000000/60)); // Assume 60 updates/second at the start
 }
 
 async fn signal_candidate(c: &RTCIceCandidate) -> Result<()> {
@@ -474,24 +476,50 @@ async fn old_main() -> Result<String> {
                         {
                             let mut mouse_last_nano_ref = MOUSE_LAST_NANO.lock().unwrap();
                             let mouse_last_nano = mouse_last_nano_ref.deref();
-                            let now = get_epoch_nanos();
-                            let diff = now - mouse_last_nano;
-                            *mouse_last_nano_ref = now;
-
-                            let diff64: u64 = diff.try_into().unwrap();
-                            let target: u64 = 16818818;
-
-                            let value = diff64 as f64 / target as f64;
                             
-                            if value > 1.15 {
-                                println!("TOO SLOW: {}", value);
-                                skip_sleep = true;
-                            } else if value < 0.70 {
-                                println!("TOO FAST: {}", value);
-                                skip_sleep = true;
-                            } else {
-                                skip_sleep= false;
-                            }
+                            let now = get_epoch_nanos();
+                            let diff = match mouse_last_nano {
+                                Some(mouse_last_nano) => Some(now - mouse_last_nano),
+                                None => None,
+                            };
+                            *mouse_last_nano_ref = Some(now);
+                            
+
+
+                            //println!("diff: {}", diff);
+                            skip_sleep = match diff {
+                                Some(diff) => {
+                                    let value: f64;
+                                    {
+                                        let mut mouse_rolling_avg_interval_ref = MOUSE_ROLLING_AVG_INTERVAL.lock().unwrap();
+                                        *mouse_rolling_avg_interval_ref = ((*mouse_rolling_avg_interval_ref.deref() as f64) * (1.0 - MOUSE_ROLLING_AVG_MULT) + (diff as f64) * MOUSE_ROLLING_AVG_MULT) as i64 as u128;
+                                        println!("diff: {}", mouse_rolling_avg_interval_ref);
+                                    
+
+                                        let diff64: u64 = diff.try_into().unwrap();
+                                        //let target: u64 = 16818818;
+            
+                                        value = diff64 as f64 / *mouse_rolling_avg_interval_ref.deref() as f64;
+                                    }
+
+                                    if value > 1.15 {
+                                        println!("TOO SLOW: {}", value);
+                                        true
+                                    } else if value < 0.70 {
+                                        println!("TOO FAST: {}", value);
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                },
+                                None => false,
+                            };
+
+                            
+                            
+                            
+
+
                         }
                     } else {
                         let mut enigo = ENIGO.lock().unwrap();
@@ -499,11 +527,15 @@ async fn old_main() -> Result<String> {
                     }
                     
 
-                } else if name == "pong".to_string() {
-                    //println!("received PONG");
+                } else if name == "mouseidle".to_string() {
+                    println!("mouseidle");
+                    {
+                        let mut mouse_last_nano_ref = MOUSE_LAST_NANO.lock().unwrap();
+                        *mouse_last_nano_ref = None;
+                    }
                 } else {
                     // NOTE
-                    //println!("Unknown event.name: {}", name);
+                    println!("Unknown event.name: {}", name);
                 }
                 
                 let skip = true;
