@@ -1,24 +1,33 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use enigo::*;
+
+#[macro_use]
+extern crate lazy_static;
+
 use rdev::display_size;
 use rdev::EventType::MouseMove;
 use rdev::{listen, Event};
 use serde::Serialize;
 use tauri::{App, CustomMenuItem, SystemTray, SystemTrayMenu};
 
+
+mod main_process;
+use crate::main_process::main_process;
+
 // Use enigo main_display_size when it will be available: https://github.com/enigo-rs/enigo/pull/79
 
+use std::f64::consts::E;
 use std::sync::Mutex;
 use std::thread;
 use tauri::Manager; // Required to access app in 'setup'
 use tauri::State;
 
-mod datachannel;
+/* mod datachannel;
 use crate::datachannel::create_data_channel;
 
 mod background_loop;
-use crate::background_loop::start_background_loop;
+use crate::background_loop::start_background_loop; */
 
 struct TauriState {
     enigo: Mutex<Enigo>,
@@ -131,8 +140,19 @@ fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
     Ok(())
 }
 
-fn main() {
-    start_background_loop();
+#[tokio::main]
+async fn main() {
+    let main_handler = thread::spawn(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                main_process().await;
+            });
+    });
+        
+    //start_background_loop();
 
     /* let (
            mut socket,
@@ -165,9 +185,12 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app_handle, event| match event {
-            tauri::RunEvent::ExitRequested { api, .. } => {
+            /* tauri::RunEvent::ExitRequested { api, .. } => {
                 api.prevent_exit();
-            }
+            } */
             _ => {}
         });
+    
+    println!("Waiting for main handler to join");
+    main_handler.join().expect("Couldn't join main handler");
 }
