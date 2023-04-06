@@ -28,7 +28,7 @@ use webrtc::peer_connection::RTCPeerConnection;
 use std::clone::Clone;
 
 mod websocket;
-use crate::datachannel::websocket::{WebSocket, CLOSE, CLOSE_IMMEDIATE};
+use crate::main_process::datachannel::websocket::{WebSocket, CLOSE, CLOSE_IMMEDIATE};
 
 const MOUSE_ROLLING_AVG_MULT : f64 = 0.05;
 
@@ -100,7 +100,7 @@ async fn signal_candidate(c: &RTCIceCandidate) -> Result<()> {
 }
 
 //#[tokio::main]
-pub async fn new_main() {
+pub async fn new_main(on_message: OnMessageHdlrFn) {
     //let background_loop_handler = thread::spawn(|| {
     let mut tries: u64 = 0;
 

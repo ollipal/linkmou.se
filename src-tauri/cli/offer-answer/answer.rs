@@ -1,10 +1,10 @@
 #[macro_use]
 extern crate lazy_static;
 
-mod datachannel;
-use crate::datachannel::new_main;
+mod main_process;
+use crate::main_process::main_process;
 
 #[tokio::main]
 async fn main() {
-    new_main().await;
+    main_process().await;
 }
