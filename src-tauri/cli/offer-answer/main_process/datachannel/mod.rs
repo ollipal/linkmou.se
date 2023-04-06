@@ -1,17 +1,17 @@
 use anyhow::Result;
 use clap::{AppSettings, Arg, Command};
 use enigo::{Enigo, MouseControllable};
-use futures::FutureExt;
+use futures::{FutureExt, Future};
 use lazy_static::__Deref;
 use serde::{Serialize, Deserialize};
 use std::io::Write;
+use std::pin::Pin;
 use std::sync::mpsc::SyncSender;
 use std::time::{SystemTime, UNIX_EPOCH};
 use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use serde_json::json;
 use tokio::time::{sleep, Duration};
 use std::sync::Arc;
-use std::{cmp};
 use tokio::sync::Mutex;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
@@ -30,9 +30,6 @@ use std::clone::Clone;
 mod websocket;
 use crate::main_process::datachannel::websocket::{WebSocket, CLOSE, CLOSE_IMMEDIATE};
 
-const MOUSE_ROLLING_AVG_MULT : f64 = 0.05;
-
-//const URL: &str = "ws://localhost:3001";
 const URL: &str = "wss://browserkvm-backend.onrender.com:443";
 const SLEEP_ADD_MS: u64 = 500;
 const SLEEP_MAX_MS: u64 = 5000;
@@ -44,27 +41,21 @@ struct SignalingMessage {
     value: String,
 }
 
-struct MouseOffset {
-    x: i32,
-    y: i32,
-}
-
-fn get_epoch_nanos() -> u128 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos()
-}
-
 lazy_static! {
     static ref PEER_CONNECTION_MUTEX: Arc<Mutex<Option<Arc<RTCPeerConnection>>>> =
         Arc::new(Mutex::new(None));
     static ref PENDING_CANDIDATES: Arc<Mutex<Vec<RTCIceCandidate>>> = Arc::new(Mutex::new(vec![]));
     static ref TX: Arc<Mutex<Option<SyncSender<String>>>> = Arc::new(Mutex::new(None));
-    static ref ENIGO: Arc<std::sync::Mutex<Option<Enigo>>> = Arc::new(std::sync::Mutex::new(None));
-    static ref MOUSE_OFFSET: Arc<std::sync::Mutex<MouseOffset>> = Arc::new(std::sync::Mutex::new(MouseOffset { x: 0, y: 0 }));
-    static ref MOUSE_LAST_NANO: Arc<std::sync::Mutex<Option<u128>>> = Arc::new(std::sync::Mutex::new(None));
-    static ref MOUSE_ROLLING_AVG_INTERVAL: Arc<std::sync::Mutex<u128>> = Arc::new(std::sync::Mutex::new(1000000000/60)); // Assume 60 updates/second at the start
+}
+
+pub struct MouseOffset {
+    pub x: i32,
+    pub y: i32,
+}
+
+pub struct PostSleepData {
+    pub name: String,
+    pub mouse_offset: MouseOffset,
 }
 
 async fn signal_candidate(c: &RTCIceCandidate) -> Result<()> {
@@ -100,18 +91,18 @@ async fn signal_candidate(c: &RTCIceCandidate) -> Result<()> {
 }
 
 //#[tokio::main]
-pub async fn new_main(on_message: OnMessageHdlrFn) {
+pub async fn process_datachannel_messages<F, G>(on_message_immmediate: F, on_message_post_sleep: G)
+    where
+        F: FnOnce(String) -> (Option<u128>, PostSleepData) + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
+        G: FnOnce(PostSleepData) -> () + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
+{
+    
     //let background_loop_handler = thread::spawn(|| {
     let mut tries: u64 = 0;
-
-    {
-        let mut enigo = ENIGO.lock().unwrap();
-        *enigo = Some(Enigo::new());
-    }
     loop {
         // Print reconnections, potentially sleep
         println!("Trying to connect {}...", tries);
-        sleep(Duration::from_millis(cmp::min(
+        sleep(Duration::from_millis(std::cmp::min(
             tries * SLEEP_ADD_MS,
             SLEEP_MAX_MS,
         )))
@@ -228,7 +219,7 @@ pub async fn new_main(on_message: OnMessageHdlrFn) {
             *tx2 = Some(tx);
         }
 
-        let result = old_main().await.unwrap();
+        let result = connect_datachannel_and_process_messages(on_message_immmediate, on_message_post_sleep).await.unwrap();
 
         if let Err(e) = handle.await {
             println!("Handle await error {}", e);
@@ -247,7 +238,11 @@ pub async fn new_main(on_message: OnMessageHdlrFn) {
     //});
 }
 
-async fn old_main() -> Result<String> {
+async fn connect_datachannel_and_process_messages<F, G>(on_message_immmediate: F, on_message_post_sleep: G) -> Result<String>
+where
+    F: FnOnce(String) -> (Option<u128>, PostSleepData) + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
+    G: FnOnce(PostSleepData) -> () + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
+{
     let mut app = Command::new("Answer")
         .version("0.1.0")
         .author("Olli Paloviita")
@@ -431,95 +426,15 @@ async fn old_main() -> Result<String> {
 
             // Register text message handling
             d.on_message(Box::new(move |msg: DataChannelMessage| {
-                //println!("Message received");
                 let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-                let mut values = msg_str.split(",");
-                let name = values.next().unwrap().to_string();
-                let mut skip_sleep = false;
-                let mut offset_x : i32 = 0;
-                let mut offset_y : i32 = 0;
-
-                if name == "mousemove".to_string() { // .to_string()?
-                    let x = values.next().unwrap().parse::<i32>().unwrap();
-                    let y = values.next().unwrap().parse::<i32>().unwrap();
-                    {
-                        let mut mouse_offset = MOUSE_OFFSET.lock().unwrap();
-                        offset_x = x - mouse_offset.x;
-                        offset_y = y - mouse_offset.y;
-                        mouse_offset.x = x / 2;
-                        mouse_offset.y = y / 2;
-                    }
-                    {
-                        let mut enigo = ENIGO.lock().unwrap();
-                        enigo.as_mut().unwrap().mouse_move_relative(offset_x, offset_y);
-                    }
-
-                    let now = get_epoch_nanos();
-                    let diff;
-                    
-                    {
-                        let mut mouse_last_nano_ref = MOUSE_LAST_NANO.lock().unwrap();
-                        let mouse_last_nano = mouse_last_nano_ref.deref();
-                        
-                        diff = match mouse_last_nano {
-                            Some(mouse_last_nano) => Some(now - mouse_last_nano),
-                            None => None,
-                        };
-                        *mouse_last_nano_ref = Some(now);
-                    }
-
-                    skip_sleep = match diff {
-                        Some(diff) => {
-                            let value: f64;
-                            {
-                                let mut mouse_rolling_avg_interval_ref = MOUSE_ROLLING_AVG_INTERVAL.lock().unwrap();
-                                *mouse_rolling_avg_interval_ref = ((*mouse_rolling_avg_interval_ref.deref() as f64) * (1.0 - MOUSE_ROLLING_AVG_MULT) + (diff as f64) * MOUSE_ROLLING_AVG_MULT) as i64 as u128;
-                                println!("diff: {}", mouse_rolling_avg_interval_ref);
-                                let diff64: u64 = diff.try_into().unwrap();
-                                value = diff64 as f64 / *mouse_rolling_avg_interval_ref.deref() as f64;
-                            }
-
-                            if value > 1.15 {
-                                println!("TOO SLOW: {}", value);
-                                true
-                            } else if value < 0.70 {
-                                println!("TOO FAST: {}", value);
-                                true
-                            } else {
-                                false
-                            }
-                        },
-                        None => false,
-                    };
-                } else if name == "mouseidle".to_string() {
-                    println!("mouseidle");
-                    {
-                        let mut mouse_last_nano_ref = MOUSE_LAST_NANO.lock().unwrap();
-                        *mouse_last_nano_ref = None;
-                    }
-                } else {
-                    // NOTE
-                    println!("Unknown event.name: {}", name);
-                }
+                let (sleep_amount, post_sleep_data) = on_message_immmediate(msg_str.into());
                 
                 //println!("Message from DataChannel '{d_label}': '{msg_str}'");
                 Box::pin(async move {
-                    if name == "mousemove"{
-                        if !skip_sleep {
-                            let mouse_rolling_avg = {
-                                let mouse_rolling_avg_interval_ref = MOUSE_ROLLING_AVG_INTERVAL.lock().unwrap();
-                                *mouse_rolling_avg_interval_ref.deref() as u64
-                            };
-                            sleep(Duration::from_nanos(mouse_rolling_avg / 2)).await;
-                        } else {
-                            println!("sleep skipped");
-                        }
-
-                        {
-                            let mut enigo = ENIGO.lock().unwrap();
-                            enigo.as_mut().unwrap().mouse_move_relative(offset_x, offset_y);
-                        }
+                    if let Some(sleep_amount) = sleep_amount {
+                        sleep(Duration::from_nanos(sleep_amount.try_into().unwrap())).await;
                     }
+                    on_message_post_sleep(post_sleep_data);
                 })
             }));
 
