@@ -42,17 +42,17 @@ futures = "0.3.28"
 # DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
 
-[[example]]
-name = "offer"
-path = "cli/offer-answer/offer.rs"
-bench = false
+# [[example]]
+# name = "offer"
+# path = "cli/offer-answer/offer.rs"
+# bench = false
 
-[[example]]
-name = "websocket"
-path = "cli/offer-answer/websocket.rs"
-bench = false
+# [[example]]
+# name = "websocket"
+# path = "cli/offer-answer/websocket.rs"
+# bench = false
 
-[[example]]
-name = "answer"
-path = "cli/offer-answer/answer.rs"
-bench = false
+# [[example]]
+# name = "answer"
+# path = "cli/offer-answer/answer.rs"
+# bench = false

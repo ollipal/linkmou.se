@@ -1,6 +1,5 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-use enigo::*;
 
 #[macro_use]
 extern crate lazy_static;
@@ -17,10 +16,10 @@ use crate::main_process::main_process;
 
 // Use enigo main_display_size when it will be available: https://github.com/enigo-rs/enigo/pull/79
 
-use std::sync::Mutex;
+/* use std::sync::Mutex; */
 use std::thread;
 use tauri::Manager; // Required to access app in 'setup'
-use tauri::State;
+/* use tauri::State; */
 
 /* mod datachannel;
 use crate::datachannel::create_data_channel;
@@ -28,9 +27,9 @@ use crate::datachannel::create_data_channel;
 mod background_loop;
 use crate::background_loop::start_background_loop; */
 
-struct TauriState {
+/* struct TauriState {
     enigo: Mutex<Enigo>,
-}
+} */
 
 #[derive(Clone, Serialize)]
 struct SystemEvent {
@@ -41,16 +40,16 @@ struct SystemEvent {
 }
 
 #[tauri::command]
-fn init(devices: State<TauriState>) {
-    *devices.enigo.lock().unwrap() = Enigo::new();
-    println!("Rust: initialized");
+fn init(/* devices: State<TauriState> */) {
+    /* *devices.enigo.lock().unwrap() = Enigo::new();
+    println!("Rust: initialized"); */
 }
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
-fn mouse_move_relative(x: i32, y: i32, devices: State<TauriState>) {
-    let mut enigo = devices.enigo.lock().unwrap();
-    enigo.mouse_move_relative(x, y);
+fn mouse_move_relative(x: i32, y: i32, /* devices: State<TauriState> */) {
+    /* let mut enigo = devices.enigo.lock().unwrap();
+    enigo.mouse_move_relative(x, y); */
 }
 
 fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
@@ -177,9 +176,9 @@ async fn main() {
     tauri::Builder::default()
         .system_tray(tray)
         .setup(|app| setup(app))
-        .manage(TauriState {
+        /* .manage(TauriState {
             enigo: Default::default(),
-        })
+        }) */
         .invoke_handler(tauri::generate_handler![init, mouse_move_relative])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
