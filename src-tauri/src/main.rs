@@ -17,7 +17,6 @@ use crate::main_process::main_process;
 
 // Use enigo main_display_size when it will be available: https://github.com/enigo-rs/enigo/pull/79
 
-use std::f64::consts::E;
 use std::sync::Mutex;
 use std::thread;
 use tauri::Manager; // Required to access app in 'setup'
