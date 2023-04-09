@@ -1,13 +1,9 @@
 use anyhow::Result;
 use clap::{AppSettings, Arg, Command};
-use enigo::{Enigo, MouseControllable};
-use futures::{FutureExt, Future};
-use lazy_static::__Deref;
+use futures::{FutureExt};
 use serde::{Serialize, Deserialize};
 use std::io::Write;
-use std::pin::Pin;
 use std::sync::mpsc::SyncSender;
-use std::time::{SystemTime, UNIX_EPOCH};
 use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use serde_json::json;
 use tokio::time::{sleep, Duration};
@@ -17,7 +13,7 @@ use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
-use webrtc::data_channel::{RTCDataChannel, OnMessageHdlrFn};
+use webrtc::data_channel::{RTCDataChannel};
 use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
@@ -92,10 +88,10 @@ async fn signal_candidate(c: &RTCIceCandidate) -> Result<()> {
 }
 
 //#[tokio::main]
-pub async fn process_datachannel_messages<F, G>(on_message_immmediate: F, on_message_post_sleep: G)
+pub async fn process_datachannel_messages<F, G>(enigo_handler_tx: SyncSender<String>, on_message_immmediate: F, on_message_post_sleep: G)
     where
-        F: FnOnce(String) -> (Option<u128>, PostSleepData) + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
-        G: FnOnce(PostSleepData) -> () + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
+        F: FnOnce(String, SyncSender<String>) -> (Option<u128>, PostSleepData) + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
+        G: FnOnce(PostSleepData, SyncSender<String>) -> () + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
 {
     
     //let background_loop_handler = thread::spawn(|| {
@@ -220,7 +216,7 @@ pub async fn process_datachannel_messages<F, G>(on_message_immmediate: F, on_mes
             *tx2 = Some(tx);
         }
 
-        let result = connect_datachannel_and_process_messages(on_message_immmediate, on_message_post_sleep).await.unwrap();
+        let result = connect_datachannel_and_process_messages(enigo_handler_tx.clone(), on_message_immmediate, on_message_post_sleep).await.unwrap();
 
         if let Err(e) = handle.await {
             println!("Handle await error {}", e);
@@ -239,10 +235,10 @@ pub async fn process_datachannel_messages<F, G>(on_message_immmediate: F, on_mes
     //});
 }
 
-async fn connect_datachannel_and_process_messages<F, G>(on_message_immmediate: F, on_message_post_sleep: G) -> Result<String>
+async fn connect_datachannel_and_process_messages<F, G>(enigo_handler_tx: SyncSender<String>, on_message_immmediate: F, on_message_post_sleep: G) -> Result<String>
 where
-    F: FnOnce(String) -> (Option<u128>, PostSleepData) + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
-    G: FnOnce(PostSleepData) -> () + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
+    F: FnOnce(String, SyncSender<String>) -> (Option<u128>, PostSleepData) + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
+    G: FnOnce(PostSleepData, SyncSender<String>) -> () + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
 {
     let mut app = Command::new("Answer")
         .version("0.1.0")
@@ -395,6 +391,8 @@ where
 
         let done_tx2_clone = done_tx2.clone();
 
+        let enigo_handler_tx_clone = enigo_handler_tx.clone();
+
         /* let ping = json!(Event {
             name: "ping".to_string(),
             value1: None,
@@ -428,14 +426,16 @@ where
             // Register text message handling
             d.on_message(Box::new(move |msg: DataChannelMessage| {
                 let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-                let (sleep_amount, post_sleep_data) = on_message_immmediate(msg_str.into());
-                
                 //println!("Message from DataChannel '{d_label}': '{msg_str}'");
+
+                let (sleep_amount, post_sleep_data) = on_message_immmediate(msg_str.into(), enigo_handler_tx_clone.clone());
+                
+                let enigo_handler_tx_clone2 = enigo_handler_tx_clone.clone();
                 Box::pin(async move {
                     if let Some(sleep_amount) = sleep_amount {
                         sleep(Duration::from_nanos(sleep_amount.try_into().unwrap())).await;
                     }
-                    on_message_post_sleep(post_sleep_data);
+                    on_message_post_sleep(post_sleep_data, enigo_handler_tx_clone2);
                 })
             }));
 
