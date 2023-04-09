@@ -126,7 +126,7 @@ pub async fn main_process() {
         loop {
             match rx.recv() {
                 Ok(message) => {
-                    println!("RECEIVED {}", message);
+                    //println!("RECEIVED {}", message);
                     let mut values = message.split(",");
                     let name = values.next().unwrap().to_string();
 
