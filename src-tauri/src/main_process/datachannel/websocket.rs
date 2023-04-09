@@ -170,8 +170,10 @@ where
                 }).to_string();
 
                 if let Err(err) = websocket.send(&websocket_message).await {
-                    println!("websocket: could not send, {}", err)
+                    println!("websocket: could not send CLOSE, {}", err)
                 };
+
+                websocket.close().await;
 
                 break;
             }
@@ -232,7 +234,7 @@ where
 } 
 
 
-#[tokio::main]
+/* #[tokio::main]
 async fn main() {
     loop {
         let url = "ws://localhost:3001";
@@ -264,4 +266,4 @@ async fn main() {
 
         //thread_handle.await.expect("The read task failed.");
     }
-}
+} */

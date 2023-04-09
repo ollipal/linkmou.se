@@ -47,7 +47,7 @@ fn init(/* devices: State<TauriState> */) {
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
-fn mouse_move_relative(x: i32, y: i32, /* devices: State<TauriState> */) {
+fn mouse_move_relative(_x: i32,_y: i32, /* devices: State<TauriState> */) {
     /* let mut enigo = devices.enigo.lock().unwrap();
     enigo.mouse_move_relative(x, y); */
 }
