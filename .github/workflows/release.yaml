@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [windows-latest] # Maybe to ubuntu 18.04? Will then be installable on older versions
+        platform: [macos-latest, ubuntu-20.04, windows-latest] # Maybe to ubuntu 18.04? Will then be installable on older versions
 
     runs-on: ${{ matrix.platform }}
     steps:
