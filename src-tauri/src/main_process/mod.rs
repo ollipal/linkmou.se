@@ -6,8 +6,8 @@ use lazy_static::__Deref;
 use crate::main_process::datachannel::{process_datachannel_messages, MouseOffset, PostSleepData};
 
 const MOUSE_ROLLING_AVG_MULT : f64 = 0.025;
-const MOUSE_TOO_SLOW : f64 = 1.10;
-const MOUSE_TOO_FAST : f64 = 0.90;
+const MOUSE_TOO_SLOW : f64 = 1.05;
+const MOUSE_TOO_FAST : f64 = 0.95;
 const ENIGO_MESSAGE_BUFFER_SIZE : usize = 250;
 const CLOSE: &str = "CLOSE";
 
