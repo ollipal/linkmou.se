@@ -433,7 +433,11 @@ where
                 let enigo_handler_tx_clone2 = enigo_handler_tx_clone.clone();
                 Box::pin(async move {
                     if let Some(sleep_amount) = sleep_amount {
-                        sleep(Duration::from_nanos(sleep_amount.try_into().unwrap())).await;
+                        if post_sleep_data.mouse_offset.x == 0 && post_sleep_data.mouse_offset.y == 0 {
+                            println!("Zero move sleep skipped")
+                        } else {
+                            sleep(Duration::from_nanos(sleep_amount.try_into().unwrap())).await;
+                        }
                     }
                     on_message_post_sleep(post_sleep_data, enigo_handler_tx_clone2);
                 })

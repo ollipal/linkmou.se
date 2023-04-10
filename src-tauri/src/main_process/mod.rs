@@ -83,9 +83,23 @@ fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData,
         
             if value > MOUSE_TOO_SLOW {
                 println!("TOO SLOW: {}, diff: {}", value, mouse_rolling_avg_interval_ref);
+                {
+                    let mut mouse_offset = MOUSE_OFFSET_FROM_REAL.lock().unwrap();
+                    mouse_offset.x = 0;
+                    mouse_offset.y = 0;
+                }
+                post_sleep_data.mouse_offset.x = 0;
+                post_sleep_data.mouse_offset.y = 0;
                 None
             } else if value < MOUSE_TOO_FAST {
                 println!("TOO FAST: {}, diff: {}", value, mouse_rolling_avg_interval_ref);
+                {
+                    let mut mouse_offset = MOUSE_OFFSET_FROM_REAL.lock().unwrap();
+                    mouse_offset.x = 0;
+                    mouse_offset.y = 0;
+                }
+                post_sleep_data.mouse_offset.x = 0;
+                post_sleep_data.mouse_offset.y = 0;
                 None
             } else {
                 //println!("GOOD: {}, diff: {}", value, mouse_rolling_avg_interval_ref);
@@ -181,7 +195,11 @@ pub async fn main_process() {
             // Move halfway halfway to the forecasted new position.
             // Will be taken into account on the next move.
             // Forecasts smoothen the operation, as the mouse updates are doubled.
-            
+            if post_sleep_data.mouse_offset.x == 0 && post_sleep_data.mouse_offset.y == 0 {
+                println!("Zero move skipped");
+                return;
+            }
+
             let command = format!("mouse_move_relative,{},{}", post_sleep_data.mouse_offset.x, post_sleep_data.mouse_offset.y);
             match enigo_handler_tx.send(command) {
                 Ok(_) => (),
