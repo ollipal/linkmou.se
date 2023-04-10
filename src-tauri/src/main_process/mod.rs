@@ -5,9 +5,9 @@ use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use lazy_static::__Deref;
 use crate::main_process::datachannel::{process_datachannel_messages, MouseOffset, PostSleepData};
 
-const MOUSE_ROLLING_AVG_MULT : f64 = 0.05;
-const MOUSE_TOO_SLOW : f64 = 1.15;
-const MOUSE_TOO_FAST : f64 = 0.70;
+const MOUSE_ROLLING_AVG_MULT : f64 = 0.025;
+const MOUSE_TOO_SLOW : f64 = 1.10;
+const MOUSE_TOO_FAST : f64 = 0.90;
 const ENIGO_MESSAGE_BUFFER_SIZE : usize = 250;
 const CLOSE: &str = "CLOSE";
 
@@ -77,17 +77,18 @@ fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData,
         Some(diff) => {
             let mut mouse_rolling_avg_interval_ref = MOUSE_ROLLING_AVG_UPDATE_INTERVAL.lock().unwrap();
             *mouse_rolling_avg_interval_ref = ((*mouse_rolling_avg_interval_ref as f64) * (1.0 - MOUSE_ROLLING_AVG_MULT) + (diff as f64) * MOUSE_ROLLING_AVG_MULT) as i64 as u128;
-            println!("diff: {}", mouse_rolling_avg_interval_ref);
+            //println!("diff: {}", mouse_rolling_avg_interval_ref);
             let diff64: u64 = diff.try_into().unwrap();
             let value = diff64 as f64 / *mouse_rolling_avg_interval_ref as f64;
         
             if value > MOUSE_TOO_SLOW {
-                println!("TOO SLOW: {}", value);
+                println!("TOO SLOW: {}, diff: {}", value, mouse_rolling_avg_interval_ref);
                 None
             } else if value < MOUSE_TOO_FAST {
-                println!("TOO FAST: {}", value);
+                println!("TOO FAST: {}, diff: {}", value, mouse_rolling_avg_interval_ref);
                 None
             } else {
+                //println!("GOOD: {}, diff: {}", value, mouse_rolling_avg_interval_ref);
                 Some(*mouse_rolling_avg_interval_ref / 2)
             }
             
