@@ -1,6 +1,6 @@
 mod datachannel;
 use std::{sync::{Arc}, time::{UNIX_EPOCH, SystemTime}, str::Split, thread};
-use enigo::{Enigo, MouseControllable};
+use enigo::{Enigo, MouseControllable, MouseButton};
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use lazy_static::__Deref;
 use crate::main_process::datachannel::{process_datachannel_messages, MouseOffset, PostSleepData};
@@ -8,6 +8,7 @@ use crate::main_process::datachannel::{process_datachannel_messages, MouseOffset
 const MOUSE_ROLLING_AVG_MULT : f64 = 0.025;
 const MOUSE_TOO_SLOW : f64 = 1.05;
 const MOUSE_TOO_FAST : f64 = 0.95;
+const WHEEL_LINE_IN_PIXELS: f64 = 17.0; // DOM_DELTA_LINE in chromiun 2023, https://stackoverflow.com/a/37474225  
 const ENIGO_MESSAGE_BUFFER_SIZE : usize = 250;
 const CLOSE: &str = "CLOSE";
 
@@ -15,6 +16,8 @@ lazy_static! {
     static ref MOUSE_OFFSET_FROM_REAL: Arc<std::sync::Mutex<MouseOffset>> = Arc::new(std::sync::Mutex::new(MouseOffset { x: 0, y: 0 }));
     static ref MOUSE_LATEST_NANO: Arc<std::sync::Mutex<Option<u128>>> = Arc::new(std::sync::Mutex::new(None));
     static ref MOUSE_ROLLING_AVG_UPDATE_INTERVAL: Arc<std::sync::Mutex<u128>> = Arc::new(std::sync::Mutex::new(1000000000/60)); // Assume 60 updates/second at the start
+    static ref WHEEL_SUB_LINE_X: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
+    static ref WHEEL_SUB_LINE_Y: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
 }
 
 fn get_epoch_nanos() -> u128 {
@@ -132,6 +135,45 @@ fn handle_mouseidle () {
     }
 }
 
+fn handle_mousedown(mut values: Split<&str>, enigo_handler_tx: SyncSender<String>) {
+    let button = values.next().unwrap().parse::<i32>().unwrap();
+    let command = format!("mouse_down,{}", button);
+    match enigo_handler_tx.send(command) {
+        Ok(_) => (),
+        Err(e) => println!("Could not send Enigo close: {}", e),
+    }
+}
+
+fn handle_mouseup(mut values: Split<&str>, enigo_handler_tx: SyncSender<String>) {
+    let button = values.next().unwrap().parse::<i32>().unwrap();
+    let command = format!("mouse_up,{}", button);
+    match enigo_handler_tx.send(command) {
+        Ok(_) => (),
+        Err(e) => println!("Could not send Enigo close: {}", e),
+    }
+}
+
+fn handle_wheel(mut values: Split<&str>, enigo_handler_tx: SyncSender<String>) {
+    let delta_mode = values.next().unwrap();
+    let x = values.next().unwrap();
+    let y = values.next().unwrap();
+    if x != "0" {
+        let command = format!("mouse_scroll_x,{},{}", delta_mode, x);
+        match enigo_handler_tx.send(command) {
+            Ok(_) => (),
+            Err(e) => println!("Could not send Enigo close: {}", e),
+        }
+    }
+
+    if y != "0" {
+        let command = format!("mouse_scroll_y,{},{}", delta_mode, y);
+        match enigo_handler_tx.send(command) {
+            Ok(_) => (),
+            Err(e) => println!("Could not send Enigo close: {}", e),
+        }
+    }
+}
+
 pub async fn main_process() {
     // Separate Enigo thread required on macOS: https://github.com/enigo-rs/enigo/issues/96#issuecomment-765253193
     let (enigo_handler_tx, rx) : (SyncSender<String>, Receiver<String>) = sync_channel(ENIGO_MESSAGE_BUFFER_SIZE);
@@ -152,6 +194,74 @@ pub async fn main_process() {
                         let x = values.next().unwrap().parse::<i32>().unwrap();
                         let y = values.next().unwrap().parse::<i32>().unwrap();
                         enigo.mouse_move_relative(x, y);
+                    } else if &name == "mouse_down" || &name == "mouse_up" {
+                        // values from here: https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/button#value
+                        //
+                        // On Linux (GTK), the 4th button and the 5th button are not supported. (Browser side, https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons#firefox_notes)
+                        let button = match values.next().unwrap().parse::<i32>().unwrap() {
+                            0 => Some(MouseButton::Left),
+                            1 => Some(MouseButton::Middle),
+                            2 => Some(MouseButton::Right),
+                            #[cfg(any(target_os = "windows", target_os = "linux"))]
+                            3 => Some(MouseButton::Back),
+                            #[cfg(any(target_os = "windows", target_os = "linux"))]
+                            4 => Some(MouseButton::Forward),
+                            _ => {
+                                println!("Unknown mouse button");
+                                None
+                            },
+                        };
+                        
+                        if let Some(button) = button {
+                            if &name == "mouse_down" {
+                                println!("mouse down");
+                                enigo.mouse_down(button);
+                            } else {
+                                println!("mouse up");
+                                enigo.mouse_up(button);
+                            }
+                        }
+
+                    } else if &name == "mouse_scroll_x" {
+                        let delta_mode = values.next().unwrap().parse::<i32>().unwrap();
+                        let mut value = values.next().unwrap().parse::<f64>().unwrap();
+                        // deltaModes: https://developer.mozilla.org/en-US/docs/Web/API/Element/wheel_event#event_properties
+                        // Treat DOM_DELTA_LINE and DOM_DELTA_PAGE the same for now
+                        if delta_mode != 0 {
+                            value *= WHEEL_LINE_IN_PIXELS;
+                        }
+                        let lines;
+                        {
+                            let mut wheel_sub_line_ref = WHEEL_SUB_LINE_X.lock().unwrap();
+                            let combined = value + wheel_sub_line_ref.deref();
+                            lines = (combined / WHEEL_LINE_IN_PIXELS).round() as i32;
+                            *wheel_sub_line_ref = combined % WHEEL_LINE_IN_PIXELS;
+                        }
+                        if lines != 0 {
+                            enigo.mouse_scroll_x(lines);
+                        } else {
+                            println!("scroll more!");
+                        }                    
+                    } else if &name == "mouse_scroll_y" {
+                        let delta_mode = values.next().unwrap().parse::<i32>().unwrap();
+                        let mut value = values.next().unwrap().parse::<f64>().unwrap();
+                        // deltaModes: https://developer.mozilla.org/en-US/docs/Web/API/Element/wheel_event#event_properties
+                        // Treat DOM_DELTA_LINE and DOM_DELTA_PAGE the same for now
+                        if delta_mode != 0 {
+                            value *= WHEEL_LINE_IN_PIXELS;
+                        }
+                        let lines;
+                        {
+                            let mut wheel_sub_line_ref = WHEEL_SUB_LINE_Y.lock().unwrap();
+                            let combined = value + wheel_sub_line_ref.deref();
+                            lines = (combined / WHEEL_LINE_IN_PIXELS).round() as i32;
+                            *wheel_sub_line_ref = combined % WHEEL_LINE_IN_PIXELS;
+                        }
+                        if lines != 0 {
+                            enigo.mouse_scroll_y(lines);
+                        } else {
+                            println!("scroll more!");
+                        }         
                     } else {
                         println!("Unknown message.name: {}", name);
                     }
@@ -183,6 +293,12 @@ pub async fn main_process() {
             (sleep_amount, post_sleep_data) = handle_mousemove(values, post_sleep_data, enigo_handler_tx);
         } else if &name == "mouseidle" {
             handle_mouseidle();
+        } else if &name == "mousedown" {
+            handle_mousedown(values, enigo_handler_tx);
+        } else if &name == "mouseup" {
+            handle_mouseup(values, enigo_handler_tx);
+        } else if &name == "wheel" {
+            handle_wheel(values, enigo_handler_tx);
         } else {
             println!("Unknown event.name: {}", name);
         }
