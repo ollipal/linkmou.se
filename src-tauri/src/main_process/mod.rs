@@ -227,6 +227,7 @@ pub async fn main_process() {
                         let mut value = values.next().unwrap().parse::<f64>().unwrap();
                         // deltaModes: https://developer.mozilla.org/en-US/docs/Web/API/Element/wheel_event#event_properties
                         // Treat DOM_DELTA_LINE and DOM_DELTA_PAGE the same for now
+                        // THIS MIGHT HAVE SOME ROUNDING ISSUES
                         if delta_mode != 0 {
                             value *= WHEEL_LINE_IN_PIXELS;
                         }
@@ -247,6 +248,7 @@ pub async fn main_process() {
                         let mut value = values.next().unwrap().parse::<f64>().unwrap();
                         // deltaModes: https://developer.mozilla.org/en-US/docs/Web/API/Element/wheel_event#event_properties
                         // Treat DOM_DELTA_LINE and DOM_DELTA_PAGE the same for now
+                        // THIS MIGHT HAVE SOME ROUNDING ISSUES
                         if delta_mode != 0 {
                             value *= WHEEL_LINE_IN_PIXELS;
                         }
