@@ -234,7 +234,7 @@ pub async fn main_process() {
                         {
                             let mut wheel_sub_line_ref = WHEEL_SUB_LINE_X.lock().unwrap();
                             let combined = value + wheel_sub_line_ref.deref();
-                            lines = (combined / WHEEL_LINE_IN_PIXELS).round() as i32;
+                            lines = (combined / WHEEL_LINE_IN_PIXELS) as i32;
                             *wheel_sub_line_ref = combined % WHEEL_LINE_IN_PIXELS;
                         }
                         if lines != 0 {
@@ -254,7 +254,7 @@ pub async fn main_process() {
                         {
                             let mut wheel_sub_line_ref = WHEEL_SUB_LINE_Y.lock().unwrap();
                             let combined = value + wheel_sub_line_ref.deref();
-                            lines = (combined / WHEEL_LINE_IN_PIXELS).round() as i32;
+                            lines = (combined / WHEEL_LINE_IN_PIXELS) as i32;
                             *wheel_sub_line_ref = combined % WHEEL_LINE_IN_PIXELS;
                         }
                         if lines != 0 {
