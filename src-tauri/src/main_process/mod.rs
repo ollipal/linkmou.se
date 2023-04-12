@@ -1,6 +1,6 @@
 mod datachannel;
 use std::{sync::{Arc}, time::{UNIX_EPOCH, SystemTime}, str::Split, thread};
-use enigo::{Enigo, MouseControllable, MouseButton};
+use enigo::{Enigo, MouseControllable, MouseButton, Key, KeyboardControllable};
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use lazy_static::__Deref;
 use crate::main_process::datachannel::{process_datachannel_messages, MouseOffset, PostSleepData};
@@ -174,6 +174,28 @@ fn handle_wheel(mut values: Split<&str>, enigo_handler_tx: SyncSender<String>) {
     }
 }
 
+fn handle_keydown(mut values: Split<&str>, enigo_handler_tx: SyncSender<String>) {
+    let code = values.next().unwrap();
+    let key = values.next().unwrap();
+
+    let command = format!("key_down,{},{}", code, key);
+    match enigo_handler_tx.send(command) {
+        Ok(_) => (),
+        Err(e) => println!("Could not send Enigo close: {}", e),
+    }
+}
+
+fn handle_keyup(mut values: Split<&str>, enigo_handler_tx: SyncSender<String>) {
+    let code = values.next().unwrap();
+    let key = values.next().unwrap();
+
+    let command = format!("key_up,{},{}", code, key);
+    match enigo_handler_tx.send(command) {
+        Ok(_) => (),
+        Err(e) => println!("Could not send Enigo close: {}", e),
+    }
+}
+
 pub async fn main_process() {
     // Separate Enigo thread required on macOS: https://github.com/enigo-rs/enigo/issues/96#issuecomment-765253193
     let (enigo_handler_tx, rx) : (SyncSender<String>, Receiver<String>) = sync_channel(ENIGO_MESSAGE_BUFFER_SIZE);
@@ -263,7 +285,25 @@ pub async fn main_process() {
                             enigo.mouse_scroll_y(lines);
                         } else {
                             println!("scroll more!");
-                        }         
+                        }
+                    } else if &name == "key_down" || &name == "key_up" {
+                        let _code = values.next().unwrap();
+                        let key = values.next().unwrap();
+                        let key_char = key.chars().nth(0);
+
+                        if let Some(key_char) = key_char {
+                            let enigo_key = Key::Layout(key_char);
+
+                            if &name == "key_down" {
+                                println!("key down");
+                                enigo.key_down(enigo_key);
+                            } else {
+                                println!("key up");
+                                enigo.key_up(enigo_key);
+                            }
+                        }
+
+
                     } else {
                         println!("Unknown message.name: {}", name);
                     }
@@ -301,6 +341,10 @@ pub async fn main_process() {
             handle_mouseup(values, enigo_handler_tx);
         } else if &name == "wheel" {
             handle_wheel(values, enigo_handler_tx);
+        } else if &name == "keydown" {
+            handle_keydown(values, enigo_handler_tx);
+        } else if &name == "keyup" {
+            handle_keyup(values, enigo_handler_tx);
         } else {
             println!("Unknown event.name: {}", name);
         }
