@@ -153,22 +153,76 @@ fn handle_mouseidle () {
     }
 }
 
-fn handle_mousedown(mut values: Split<&str>, enigo_handler_tx: SyncSender<String>) {
+fn handle_mousedown(mut values: Split<&str>/* , enigo_handler_tx: SyncSender<String> */) {
     let button = values.next().unwrap().parse::<i32>().unwrap();
     let command = format!("mouse_down,{}", button);
-    match enigo_handler_tx.send(command) {
-        Ok(_) => (),
-        Err(e) => println!("Could not send Enigo close: {}", e),
-    }
+    println!("{}", command);
+
+    // values from here: https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/button#value
+    //
+    // On Linux (GTK), the 4th button and the 5th button are not supported. (Browser side, https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons#firefox_notes)
+    let button = match button {
+        0 => Button::Left,
+        1 => Button::Middle,
+        2 => Button::Right,
+        // From:
+        // https://github.com/enigo-rs/enigo/blob/de1828ab0a76f193eaab4b75aa76044377810e4a/src/win/win_impl.rs#L130
+        // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-mouse_event#parameters
+        #[cfg(target_os = "windows")]
+        3 => Button::Unknown(0x0080),
+        // From: https://github.com/enigo-rs/enigo/blob/1df84701a7c239835e1962961411b3074676f5d4/src/linux.rs#L74
+        #[cfg(target_os = "linux")]
+        3 => Button::Unknown(9),
+        // From:
+        // https://github.com/enigo-rs/enigo/blob/de1828ab0a76f193eaab4b75aa76044377810e4a/src/win/win_impl.rs#L152
+        // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-mouse_event#parameters
+        #[cfg(target_os = "windows")]
+        4 => Button::Unknown(0x0100),
+        // https://github.com/enigo-rs/enigo/blob/1df84701a7c239835e1962961411b3074676f5d4/src/linux.rs#L75
+        #[cfg(target_os = "linux")]
+        4 => Button::Unknown(8),
+        _ => {
+            println!("Unknown mouse button");
+            return;
+        },
+    };
+    send(&EventType::ButtonPress(button));
 }
 
-fn handle_mouseup(mut values: Split<&str>, enigo_handler_tx: SyncSender<String>) {
+fn handle_mouseup(mut values: Split<&str>/* , enigo_handler_tx: SyncSender<String> */) {
     let button = values.next().unwrap().parse::<i32>().unwrap();
     let command = format!("mouse_up,{}", button);
-    match enigo_handler_tx.send(command) {
-        Ok(_) => (),
-        Err(e) => println!("Could not send Enigo close: {}", e),
-    }
+    println!("{}", command);
+
+    // values from here: https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/button#value
+    //
+    // On Linux (GTK), the 4th button and the 5th button are not supported. (Browser side, https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons#firefox_notes)
+    let button = match button {
+        0 => Button::Left,
+        1 => Button::Middle,
+        2 => Button::Right,
+        // From:
+        // https://github.com/enigo-rs/enigo/blob/de1828ab0a76f193eaab4b75aa76044377810e4a/src/win/win_impl.rs#L130
+        // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-mouse_event#parameters
+        #[cfg(target_os = "windows")]
+        3 => Button::Unknown(0x0080),
+        // From: https://github.com/enigo-rs/enigo/blob/1df84701a7c239835e1962961411b3074676f5d4/src/linux.rs#L74
+        #[cfg(target_os = "linux")]
+        3 => Button::Unknown(9),
+        // From:
+        // https://github.com/enigo-rs/enigo/blob/de1828ab0a76f193eaab4b75aa76044377810e4a/src/win/win_impl.rs#L152
+        // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-mouse_event#parameters
+        #[cfg(target_os = "windows")]
+        4 => Button::Unknown(0x0100),
+        // https://github.com/enigo-rs/enigo/blob/1df84701a7c239835e1962961411b3074676f5d4/src/linux.rs#L75
+        #[cfg(target_os = "linux")]
+        4 => Button::Unknown(8),
+        _ => {
+            println!("Unknown mouse button");
+            return;
+        },
+    };
+    send(&EventType::ButtonRelease(button));
 }
 
 fn handle_wheel(mut values: Split<&str>) {
@@ -350,6 +404,8 @@ fn handle_keydown(mut values: Split<&str>) {
 }
 
 fn handle_keyup(mut values: Split<&str>) {
+    // https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_code_values
+    // https://source.chromium.org/chromium/chromium/src/+/main:ui/events/keycodes/dom/dom_code_data.inc;l=344;drc=3344b61f7c7f06cf96069751c3bd64d8ec3e3428
     let rdev_code_to_key = HashMap::from([
         ("AltLeft", Key2::Alt),
         ("AltRight", Key2::AltGr),
@@ -479,104 +535,6 @@ pub async fn main_process() {
     let (enigo_handler_tx, rx) : (SyncSender<String>, Receiver<String>) = sync_channel(ENIGO_MESSAGE_BUFFER_SIZE);
     let enigo_handler = thread::spawn(move || {
         let mut enigo = Enigo::new();
-        
-        // https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_code_values
-        // https://source.chromium.org/chromium/chromium/src/+/main:ui/events/keycodes/dom/dom_code_data.inc;l=344;drc=3344b61f7c7f06cf96069751c3bd64d8ec3e3428
-        let code_to_key = HashMap::from([
-            ("AltLeft", Key::Alt),
-            //("AltRight", Key::Alt or Key::Commend), // This is handled separately with KEYBOARD_ALTGR_PRESSED
-            //("", Key::Begin),
-            //("", Key::Break),
-            //("", Key::Cancel),
-            ("CapsLock", Key::CapsLock),
-            //("", Key::Clear),
-            //("", Key::Command),
-            //("", Key::Control),
-            ("Delete", Key::Delete),
-            ("ArrowDown", Key::DownArrow),
-            ("End", Key::End),
-            ("Escape", Key::Escape), // will never trigger probably, as the frontend stops controlling?
-            //("", Key::Execute),
-            // Some of the F not in use
-            ("F1", Key::F1),
-            ("F2", Key::F2),
-            ("F3", Key::F3),
-            ("F4", Key::F4),
-            ("F5", Key::F5),
-            ("F6", Key::F6),
-            ("F7", Key::F7),
-            ("F8", Key::F8),
-            ("F9", Key::F9),
-            ("F10", Key::F10),
-            ("F11", Key::F11),
-            ("F12", Key::F12),
-            ("F13", Key::F13),
-            ("F14", Key::F14),
-            ("F15", Key::F15),
-            ("F16", Key::F16),
-            ("F17", Key::F17),
-            ("F18", Key::F18),
-            ("F19", Key::F19),
-            ("F20", Key::F20),
-            ("F21", Key::F21),
-            ("F22", Key::F22),
-            ("F23", Key::F23),
-            ("F24", Key::F24),
-            ("F25", Key::F25),
-            ("F26", Key::F26),
-            ("F27", Key::F27),
-            ("F28", Key::F28),
-            ("F29", Key::F29),
-            ("F30", Key::F30),
-            ("F31", Key::F31),
-            ("F32", Key::F32),
-            ("F33", Key::F33),
-            ("F34", Key::F34),
-            ("F35", Key::F35),
-            ("Find", Key::Find),
-            ("Lang1", Key::Hangul),
-            ("Lang2", Key::Hanja), // Chromium only
-            ("Help", Key::Help), // Gecko
-            //("Insert", Key::Help),  // Chromium, HOW CAN BE ALSO "insert"?
-            ("Home", Key::Home),
-            ("Insert", Key::Insert),
-            // Next three probably wrong, not sure
-            ("Lang3", Key::Kanji), // Chromium only
-            ("Lang4", Key::Kanji), // Chromium only
-            ("Lang5", Key::Kanji), // Chromium only
-            ("ControlLeft", Key::LControl),
-            ("ArrowLeft", Key::LeftArrow),
-            //("", Key::Linefeed),
-            ("ContextMenu", Key::LMenu),
-            ("ShiftLeft", Key::LShift),
-            ("OSLeft", Key::Meta),
-            ("MetaLeft", Key::Meta),
-            //("", Key::ModeChange),
-            ("NumLock", Key::Numlock),
-            //("", Key::Option),
-            ("PageDown", Key::PageDown),
-            ("PageUp", Key::PageUp),
-            ("Pause", Key::Pause),
-            ("PrintScreen", Key::Print),
-            ("ControlRight", Key::RControl),
-            //("", Key::Redo),
-            ("Enter", Key::Return),
-            ("ArrowRight", Key::RightArrow),
-            ("ShiftRight", Key::RShift),
-            ("ScrollLock", Key::ScrollLock),
-            ("Select", Key::Select),
-            //("", Key::ScriptSwitch),
-            //("", Key::Shift),
-            //("", Key::ShiftLock),
-            ("Space", Key::Space),
-            //("", Key::Super),
-            //("", Key::SysReq),
-            ("Tab", Key::Tab),
-            ("Undo", Key::Undo),
-            ("ArrowUp", Key::UpArrow),
-            //("", Key::Windows),
-            ("Backspace", Key::Backspace),
-        ]);
 
         // TODO others here as well
         loop {
@@ -593,8 +551,14 @@ pub async fn main_process() {
                         let x = values.next().unwrap().parse::<i32>().unwrap();
                         let y = values.next().unwrap().parse::<i32>().unwrap();
                         enigo.mouse_move_relative(x, y);
-                    } else if &name == "mouse_down" || &name == "mouse_up" {
-                        // values from here: https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/button#value
+                    } /* else if &name == "mouse_down" || &name == "mouse_up" {
+                        // values fr
+
+Simple library to listen and send events globally to keyboard and mouse on macOS, Windows and Linux (x11).
+
+You can also check out Enigo which is another crate which helped me write this one.
+
+This crate is so far a pet project for me to understand the Rom here: https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/button#value
                         //
                         // On Linux (GTK), the 4th button and the 5th button are not supported. (Browser side, https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons#firefox_notes)
                         let button = match values.next().unwrap().parse::<i32>().unwrap() {
@@ -621,7 +585,7 @@ pub async fn main_process() {
                             }
                         }
 
-                    } else {
+                    }  */else {
                         println!("Unknown message.name: {}", name);
                     }
                     
@@ -653,9 +617,9 @@ pub async fn main_process() {
         } else if &name == "mouseidle" {
             handle_mouseidle();
         } else if &name == "mousedown" {
-            handle_mousedown(values, enigo_handler_tx);
+            handle_mousedown(values);
         } else if &name == "mouseup" {
-            handle_mouseup(values, enigo_handler_tx);
+            handle_mouseup(values);
         } else if &name == "wheel" {
             handle_wheel(values);
         } else if &name == "keydown" {
