@@ -165,19 +165,17 @@ fn handle_mousedown(mut values: Split<&str>/* , enigo_handler_tx: SyncSender<Str
         0 => Button::Left,
         1 => Button::Middle,
         2 => Button::Right,
-        // From:
-        // https://github.com/enigo-rs/enigo/blob/de1828ab0a76f193eaab4b75aa76044377810e4a/src/win/win_impl.rs#L130
-        // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-mouse_event#parameters
+        // FORWARD BUTTON
+        // From: https://github.com/enigo-rs/enigo/blob/de1828ab0a76f193eaab4b75aa76044377810e4a/src/win/win_impl.rs#L163
         #[cfg(target_os = "windows")]
-        3 => Button::Unknown(0x0080),
+        3 => Button::Unknown(2),
         // From: https://github.com/enigo-rs/enigo/blob/1df84701a7c239835e1962961411b3074676f5d4/src/linux.rs#L74
         #[cfg(target_os = "linux")]
         3 => Button::Unknown(9),
-        // From:
-        // https://github.com/enigo-rs/enigo/blob/de1828ab0a76f193eaab4b75aa76044377810e4a/src/win/win_impl.rs#L152
-        // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-mouse_event#parameters
+        // BACK BUTTON
+        // From: https://github.com/enigo-rs/enigo/blob/de1828ab0a76f193eaab4b75aa76044377810e4a/src/win/win_impl.rs#L162
         #[cfg(target_os = "windows")]
-        4 => Button::Unknown(0x0100),
+        4 => Button::Unknown(1),
         // https://github.com/enigo-rs/enigo/blob/1df84701a7c239835e1962961411b3074676f5d4/src/linux.rs#L75
         #[cfg(target_os = "linux")]
         4 => Button::Unknown(8),
@@ -201,19 +199,17 @@ fn handle_mouseup(mut values: Split<&str>/* , enigo_handler_tx: SyncSender<Strin
         0 => Button::Left,
         1 => Button::Middle,
         2 => Button::Right,
-        // From:
-        // https://github.com/enigo-rs/enigo/blob/de1828ab0a76f193eaab4b75aa76044377810e4a/src/win/win_impl.rs#L130
-        // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-mouse_event#parameters
+        // FORWARD BUTTON
+        // From: https://github.com/enigo-rs/enigo/blob/de1828ab0a76f193eaab4b75aa76044377810e4a/src/win/win_impl.rs#L163
         #[cfg(target_os = "windows")]
-        3 => Button::Unknown(0x0080),
+        3 => Button::Unknown(2),
         // From: https://github.com/enigo-rs/enigo/blob/1df84701a7c239835e1962961411b3074676f5d4/src/linux.rs#L74
         #[cfg(target_os = "linux")]
         3 => Button::Unknown(9),
-        // From:
-        // https://github.com/enigo-rs/enigo/blob/de1828ab0a76f193eaab4b75aa76044377810e4a/src/win/win_impl.rs#L152
-        // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-mouse_event#parameters
+        // BACK BUTTON
+        // From: https://github.com/enigo-rs/enigo/blob/de1828ab0a76f193eaab4b75aa76044377810e4a/src/win/win_impl.rs#L162
         #[cfg(target_os = "windows")]
-        4 => Button::Unknown(0x0100),
+        4 => Button::Unknown(1),
         // https://github.com/enigo-rs/enigo/blob/1df84701a7c239835e1962961411b3074676f5d4/src/linux.rs#L75
         #[cfg(target_os = "linux")]
         4 => Button::Unknown(8),
