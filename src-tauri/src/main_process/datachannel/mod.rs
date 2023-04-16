@@ -22,6 +22,7 @@ use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
 use std::clone::Clone;
+use copypasta::{ClipboardContext, ClipboardProvider};
 
 mod websocket;
 use crate::main_process::datachannel::websocket::{WebSocket, CLOSE, CLOSE_IMMEDIATE};
@@ -53,6 +54,11 @@ pub struct MouseOffset {
 pub struct PostSleepData {
     pub name: String,
     pub mouse_offset: MouseOffset,
+}
+
+fn handle_copy_cut() -> String{
+    let mut ctx = ClipboardContext::new().unwrap();
+    return format!("copycut,{}", ctx.get_contents().unwrap());
 }
 
 async fn signal_candidate(c: &RTCIceCandidate) -> Result<()> {
@@ -423,6 +429,7 @@ where
                 })
             }));
 
+            let d_clone = d.clone();
             // Register text message handling
             d.on_message(Box::new(move |msg: DataChannelMessage| {
                 let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
@@ -431,12 +438,20 @@ where
                 let (sleep_amount, post_sleep_data) = on_message_immmediate(msg_str.into(), enigo_handler_tx_clone.clone());
                 
                 let enigo_handler_tx_clone2 = enigo_handler_tx_clone.clone();
+                let d_clone2 = d_clone.clone();
+
                 Box::pin(async move {
                     if let Some(sleep_amount) = sleep_amount {
-                        if post_sleep_data.mouse_offset.x == 0 && post_sleep_data.mouse_offset.y == 0 {
+                        if post_sleep_data.name == "mousemove" && post_sleep_data.mouse_offset.x == 0 && post_sleep_data.mouse_offset.y == 0 {
                             println!("Zero move sleep skipped")
                         } else {
                             sleep(Duration::from_nanos(sleep_amount.try_into().unwrap())).await;
+                        }
+                    }
+                    if post_sleep_data.name == "copy" || post_sleep_data.name == "cut"{
+                        let response = handle_copy_cut();
+                        if let Err(e) = d_clone2.send_text(response).await {
+                            print!("Could not send clipboard data: {}", e);
                         }
                     }
                     on_message_post_sleep(post_sleep_data, enigo_handler_tx_clone2);

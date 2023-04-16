@@ -1,11 +1,12 @@
 mod datachannel;
-use std::{sync::{Arc}, time::{UNIX_EPOCH, SystemTime}, str::Split, thread, collections::HashMap};
-use enigo::{Enigo, MouseControllable, MouseButton, Key, KeyboardControllable};
+use std::{sync::{Arc}, time::{UNIX_EPOCH, SystemTime, self}, str::Split, thread, collections::HashMap};
+use enigo::{Enigo, MouseControllable};
 use rdev::{simulate, Button, EventType, Key as Key2, SimulateError};
-use std::{time};
+//use webrtc::data_channel::RTCDataChannel;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use lazy_static::__Deref;
 use crate::main_process::datachannel::{process_datachannel_messages, MouseOffset, PostSleepData};
+use copypasta::{ClipboardContext, ClipboardProvider};
 
 const MOUSE_ROLLING_AVG_MULT : f64 = 0.025;
 const MOUSE_TOO_SLOW : f64 = 1.05;
@@ -526,6 +527,20 @@ fn handle_keyup(mut values: Split<&str>) {
 
 }
 
+fn handle_paste(mut values: Split<&str>) {
+    let delay = time::Duration::from_millis(20);
+    
+    let data = values.next().unwrap();
+    let mut ctx = ClipboardContext::new().unwrap();
+    ctx.set_contents(data.to_owned()).unwrap();
+    send(&EventType::KeyPress(Key2::ControlLeft));
+    thread::sleep(delay);
+    send(&EventType::KeyPress(Key2::KeyV));
+    thread::sleep(delay);
+
+    println!("Pasted {}!", data);
+}
+
 pub async fn main_process() {
     // Separate Enigo thread required on macOS: https://github.com/enigo-rs/enigo/issues/96#issuecomment-765253193
     let (enigo_handler_tx, rx) : (SyncSender<String>, Receiver<String>) = sync_channel(ENIGO_MESSAGE_BUFFER_SIZE);
@@ -622,6 +637,11 @@ This crate is so far a pet project for me to understand the Rom here: https://de
             handle_keydown(values);
         } else if &name == "keyup" {
             handle_keyup(values);
+        } else if &name == "copy" || &name == "cut" {
+            // give 50ms time for copy/cut before reading
+            sleep_amount = Some(50 * 1000000);
+        } else if &name == "paste" {
+            handle_paste(values);
         } else {
             println!("Unknown event.name: {}", name);
         }
