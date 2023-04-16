@@ -30,6 +30,21 @@ fn get_epoch_nanos() -> u128 {
         .as_nanos()
 }
 
+fn send(event_type: &EventType) {
+    //let delay = time::Duration::from_millis(20);
+    match simulate(event_type) {
+        Ok(()) => (),
+        Err(SimulateError) => {
+            println!("We could not send {:?}", event_type);
+        }
+    }
+    // Let ths OS catchup (at least MacOS)
+    //if cfg!(linux) {
+        //println!("LINUX");
+        //thread::sleep(delay);
+    //}
+}
+
 fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData, enigo_handler_tx: SyncSender<String>) -> (Option<u128>, PostSleepData) {
     // Move immediately to new position. Take mouse offset into account
     // (this point may've been forecasted before)
@@ -156,43 +171,47 @@ fn handle_mouseup(mut values: Split<&str>, enigo_handler_tx: SyncSender<String>)
     }
 }
 
-fn handle_wheel(mut values: Split<&str>, enigo_handler_tx: SyncSender<String>) {
-    let delta_mode = values.next().unwrap();
-    let x = values.next().unwrap();
-    let y = values.next().unwrap();
-    if x != "0" {
-        let command = format!("mouse_scroll_x,{},{}", delta_mode, x);
-        match enigo_handler_tx.send(command) {
-            Ok(_) => (),
-            Err(e) => println!("Could not send Enigo close: {}", e),
-        }
+fn handle_wheel(mut values: Split<&str>) {
+    let delta_mode = values.next().unwrap().parse::<i32>().unwrap();
+    let mut x = values.next().unwrap().parse::<f64>().unwrap();
+    let mut y = values.next().unwrap().parse::<f64>().unwrap();
+
+    // deltaModes: https://developer.mozilla.org/en-US/docs/Web/API/Element/wheel_event#event_properties
+    // Treat DOM_DELTA_LINE and DOM_DELTA_PAGE the same for now
+    if delta_mode != 0 {
+        x *= WHEEL_LINE_IN_PIXELS;
+        y *= WHEEL_LINE_IN_PIXELS;
     }
 
-    if y != "0" {
-        let command = format!("mouse_scroll_y,{},{}", delta_mode, y);
-        match enigo_handler_tx.send(command) {
-            Ok(_) => (),
-            Err(e) => println!("Could not send Enigo close: {}", e),
-        }
+    let full_pixels_x;
+    {
+        let mut wheel_sub_line_ref = WHEEL_SUB_LINE_X.lock().unwrap();
+        let combined = x + wheel_sub_line_ref.deref();
+        full_pixels_x = (combined / 1.0) as i64;
+        *wheel_sub_line_ref = combined % 1.0;
+        //println!("reminder x {}", wheel_sub_line_ref.deref());
+    }
+
+    let full_pixels_y;
+    {
+        let mut wheel_sub_line_ref = WHEEL_SUB_LINE_Y.lock().unwrap();
+        let combined = y + wheel_sub_line_ref.deref();
+        full_pixels_y = (combined / 1.0) as i64;
+        *wheel_sub_line_ref = combined % 1.0;
+        //println!("reminder y {}", wheel_sub_line_ref.deref());
+    }
+
+    if full_pixels_x != 0 || full_pixels_y != 0 {
+        send(&EventType::Wheel {
+            delta_x: -full_pixels_x,
+            delta_y: -full_pixels_y,
+        });
+    } else {
+        println!("scroll more!");
     }
 }
 
-fn send(event_type: &EventType) {
-    let delay = time::Duration::from_millis(20);
-    match simulate(event_type) {
-        Ok(()) => (),
-        Err(SimulateError) => {
-            println!("We could not send {:?}", event_type);
-        }
-    }
-    // Let ths OS catchup (at least MacOS)
-    //if cfg!(linux) {
-        //println!("LINUX");
-        //thread::sleep(delay);
-    //}
-}
-
-fn handle_keydown(mut values: Split<&str>, enigo_handler_tx: SyncSender<String>) {
+fn handle_keydown(mut values: Split<&str>) {
     // TODO make sutre there is at least 20 ms between kay presses (even on rdev)
     // https://github.com/enigo-rs/enigo/issues/105
 
@@ -328,15 +347,9 @@ fn handle_keydown(mut values: Split<&str>, enigo_handler_tx: SyncSender<String>)
         Some(key) => send(&EventType::KeyPress(*key)),
         None => println!("Unknown code: {}", code),
     }
-    
-
-    /* match enigo_handler_tx.send(command) {
-        Ok(_) => (),
-        Err(e) => println!("Could not send Enigo close: {}", e),
-    } */
 }
 
-fn handle_keyup(mut values: Split<&str>, enigo_handler_tx: SyncSender<String>) {
+fn handle_keyup(mut values: Split<&str>) {
     let rdev_code_to_key = HashMap::from([
         ("AltLeft", Key2::Alt),
         ("AltRight", Key2::AltGr),
@@ -459,12 +472,6 @@ fn handle_keyup(mut values: Split<&str>, enigo_handler_tx: SyncSender<String>) {
         None => println!("Unknown code: {}", code),
     }
 
-
-
-    /* match enigo_handler_tx.send(command) {
-        Ok(_) => (),
-        Err(e) => println!("Could not send Enigo close: {}", e),
-    } */
 }
 
 pub async fn main_process() {
@@ -614,108 +621,6 @@ pub async fn main_process() {
                             }
                         }
 
-                    } else if &name == "mouse_scroll_x" {
-                        let delta_mode = values.next().unwrap().parse::<i32>().unwrap();
-                        let mut value = values.next().unwrap().parse::<f64>().unwrap();
-                        // deltaModes: https://developer.mozilla.org/en-US/docs/Web/API/Element/wheel_event#event_properties
-                        // Treat DOM_DELTA_LINE and DOM_DELTA_PAGE the same for now
-                        // THIS MIGHT HAVE SOME ROUNDING ISSUES
-                        if delta_mode != 0 {
-                            value *= WHEEL_LINE_IN_PIXELS;
-                        }
-                        let lines;
-                        {
-                            let mut wheel_sub_line_ref = WHEEL_SUB_LINE_X.lock().unwrap();
-                            let combined = value + wheel_sub_line_ref.deref();
-                            lines = (combined / WHEEL_LINE_IN_PIXELS) as i32;
-                            *wheel_sub_line_ref = combined % WHEEL_LINE_IN_PIXELS;
-                        }
-                        if lines != 0 {
-                            enigo.mouse_scroll_x(lines);
-                        } else {
-                            println!("scroll more!");
-                        }                    
-                    } else if &name == "mouse_scroll_y" {
-                        let delta_mode = values.next().unwrap().parse::<i32>().unwrap();
-                        let mut value = values.next().unwrap().parse::<f64>().unwrap();
-                        // deltaModes: https://developer.mozilla.org/en-US/docs/Web/API/Element/wheel_event#event_properties
-                        // Treat DOM_DELTA_LINE and DOM_DELTA_PAGE the same for now
-                        // THIS MIGHT HAVE SOME ROUNDING ISSUES
-                        if delta_mode != 0 {
-                            value *= WHEEL_LINE_IN_PIXELS;
-                        }
-                        let lines;
-                        {
-                            let mut wheel_sub_line_ref = WHEEL_SUB_LINE_Y.lock().unwrap();
-                            let combined = value + wheel_sub_line_ref.deref();
-                            lines = (combined / WHEEL_LINE_IN_PIXELS) as i32;
-                            *wheel_sub_line_ref = combined % WHEEL_LINE_IN_PIXELS;
-                        }
-                        if lines != 0 {
-                            enigo.mouse_scroll_y(lines);
-                        } else {
-                            println!("scroll more!");
-                        }
-                    } else if &name == "key_down" || &name == "key_up" {
-                        // TODO handle comma separately!
-                        let code = values.next().unwrap();
-                        let key_str = values.next().unwrap();
-                        let key_char = key_str.chars().nth(0);
-
-                        /* if code == "ControlLeft" {
-                            println!("ControlLeft skipped");
-                            continue;
-                        } */
-
-                        if code == "AltRight" {
-                            {
-                                let mut altgr_pressed_ref = KEYBOARD_ALTGR_PRESSED.lock().unwrap();
-                                if &name == "key_down" {
-                                    println!("Altgr pressed");
-                                    *altgr_pressed_ref = true;
-                                } else {
-                                    println!("Altgr released");
-                                    *altgr_pressed_ref = false;
-                                }
-                            }
-                            continue;
-                        }
-
-                        let key;
-                        if let Some(k) = code_to_key.get(code) {
-                            key = Some(*k);
-                        } else if let Some(key_char) = key_char {
-                            key = Some(Key::Layout(key_char));
-                        } else {
-                            println!("Unknown key");
-                            key = None;
-                        }
-
-                        if let Some(key) = key {
-                            if &name == "key_down" {
-                                {
-                                    let altgr_pressed = KEYBOARD_ALTGR_PRESSED.lock().unwrap();
-                                    if *altgr_pressed.deref() && key_str.len() == 1 {
-                                        println!("{} sequence", key_str);
-                                        enigo.key_up(Key::LControl);
-                                        enigo.key_sequence(key_str);
-                                        // TODO key down LContorl?
-                                    } else {
-                                        println!("{:?} down", key);
-                                        enigo.key_down(key);
-                                    }
-                                }
-                                //println!("({})", key_str);
-                                //enigo.key_down(key);
-                                //enigo.key_sequence(key_str);
-                            } else {
-                                println!("{:?} up", key);
-                                enigo.key_up(key);
-                            }
-                        }
-                        
-
-
                     } else {
                         println!("Unknown message.name: {}", name);
                     }
@@ -752,11 +657,11 @@ pub async fn main_process() {
         } else if &name == "mouseup" {
             handle_mouseup(values, enigo_handler_tx);
         } else if &name == "wheel" {
-            handle_wheel(values, enigo_handler_tx);
+            handle_wheel(values);
         } else if &name == "keydown" {
-            handle_keydown(values, enigo_handler_tx);
+            handle_keydown(values);
         } else if &name == "keyup" {
-            handle_keyup(values, enigo_handler_tx);
+            handle_keyup(values);
         } else {
             println!("Unknown event.name: {}", name);
         }
