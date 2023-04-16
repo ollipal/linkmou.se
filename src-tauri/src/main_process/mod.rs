@@ -1,5 +1,5 @@
 mod datachannel;
-use std::{sync::{Arc}, time::{UNIX_EPOCH, SystemTime}, str::Split, thread};
+use std::{sync::{Arc}, time::{UNIX_EPOCH, SystemTime}, str::Split, thread, collections::HashMap};
 use enigo::{Enigo, MouseControllable, MouseButton, Key, KeyboardControllable};
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use lazy_static::__Deref;
@@ -18,6 +18,7 @@ lazy_static! {
     static ref MOUSE_ROLLING_AVG_UPDATE_INTERVAL: Arc<std::sync::Mutex<u128>> = Arc::new(std::sync::Mutex::new(1000000000/60)); // Assume 60 updates/second at the start
     static ref WHEEL_SUB_LINE_X: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
     static ref WHEEL_SUB_LINE_Y: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
+    static ref KEYBOARD_ALTGR_PRESSED: Arc<std::sync::Mutex<bool>> = Arc::new(std::sync::Mutex::new(false));
 }
 
 fn get_epoch_nanos() -> u128 {
@@ -123,7 +124,7 @@ fn handle_mouseidle () {
     // Reset mouse latest nano time
     // This will make average mouse update interval more accurate
     // Also reset the offset (keep the "wrong"/forecasted position at the end)
-    println!("mouseidle");
+    //println!("mouseidle");
     {
         let mut mouse_latest_nano_ref = MOUSE_LATEST_NANO.lock().unwrap();
         *mouse_latest_nano_ref = None;
@@ -201,6 +202,104 @@ pub async fn main_process() {
     let (enigo_handler_tx, rx) : (SyncSender<String>, Receiver<String>) = sync_channel(ENIGO_MESSAGE_BUFFER_SIZE);
     let enigo_handler = thread::spawn(move || {
         let mut enigo = Enigo::new();
+        // https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_code_values
+        // https://source.chromium.org/chromium/chromium/src/+/main:ui/events/keycodes/dom/dom_code_data.inc;l=344;drc=3344b61f7c7f06cf96069751c3bd64d8ec3e3428
+        let code_to_key = HashMap::from([
+            ("AltLeft", Key::Alt),
+            //("AltRight", Key::Alt or Key::Commend), // This is handled separately with KEYBOARD_ALTGR_PRESSED
+            //("", Key::Begin),
+            //("", Key::Break),
+            //("", Key::Cancel),
+            ("CapsLock", Key::CapsLock),
+            //("", Key::Clear),
+            //("", Key::Command),
+            //("", Key::Control),
+            ("Delete", Key::Delete),
+            ("ArrowDown", Key::DownArrow),
+            ("End", Key::End),
+            ("Escape", Key::Escape), // will never trigger probably, as the frontend stops controlling?
+            //("", Key::Execute),
+            // Some of the F not in use
+            ("F1", Key::F1),
+            ("F2", Key::F2),
+            ("F3", Key::F3),
+            ("F4", Key::F4),
+            ("F5", Key::F5),
+            ("F6", Key::F6),
+            ("F7", Key::F7),
+            ("F8", Key::F8),
+            ("F9", Key::F9),
+            ("F10", Key::F10),
+            ("F11", Key::F11),
+            ("F12", Key::F12),
+            ("F13", Key::F13),
+            ("F14", Key::F14),
+            ("F15", Key::F15),
+            ("F16", Key::F16),
+            ("F17", Key::F17),
+            ("F18", Key::F18),
+            ("F19", Key::F19),
+            ("F20", Key::F20),
+            ("F21", Key::F21),
+            ("F22", Key::F22),
+            ("F23", Key::F23),
+            ("F24", Key::F24),
+            ("F25", Key::F25),
+            ("F26", Key::F26),
+            ("F27", Key::F27),
+            ("F28", Key::F28),
+            ("F29", Key::F29),
+            ("F30", Key::F30),
+            ("F31", Key::F31),
+            ("F32", Key::F32),
+            ("F33", Key::F33),
+            ("F34", Key::F34),
+            ("F35", Key::F35),
+            ("Find", Key::Find),
+            ("Lang1", Key::Hangul),
+            ("Lang2", Key::Hanja), // Chromium only
+            ("Help", Key::Help), // Gecko
+            //("Insert", Key::Help),  // Chromium, HOW CAN BE ALSO "insert"?
+            ("Home", Key::Home),
+            ("Insert", Key::Insert),
+            // Next three probably wrong, not sure
+            ("Lang3", Key::Kanji), // Chromium only
+            ("Lang4", Key::Kanji), // Chromium only
+            ("Lang5", Key::Kanji), // Chromium only
+            ("ControlLeft", Key::LControl),
+            ("ArrowLeft", Key::LeftArrow),
+            //("", Key::Linefeed),
+            ("ContextMenu", Key::LMenu),
+            ("ShiftLeft", Key::LShift),
+            ("OSLeft", Key::Meta),
+            ("MetaLeft", Key::Meta),
+            //("", Key::ModeChange),
+            ("NumLock", Key::Numlock),
+            //("", Key::Option),
+            ("PageDown", Key::PageDown),
+            ("PageUp", Key::PageUp),
+            ("Pause", Key::Pause),
+            ("PrintScreen", Key::Print),
+            ("ControlRight", Key::RControl),
+            //("", Key::Redo),
+            ("Enter", Key::Return),
+            ("ArrowRight", Key::RightArrow),
+            ("ShiftRight", Key::RShift),
+            ("ScrollLock", Key::ScrollLock),
+            ("Select", Key::Select),
+            //("", Key::ScriptSwitch),
+            //("", Key::Shift),
+            //("", Key::ShiftLock),
+            ("Space", Key::Space),
+            //("", Key::Super),
+            //("", Key::SysReq),
+            ("Tab", Key::Tab),
+            ("Undo", Key::Undo),
+            ("ArrowUp", Key::UpArrow),
+            //("", Key::Windows),
+            ("Backspace", Key::Backspace),
+        ]);
+
         // TODO others here as well
         loop {
             match rx.recv() {
@@ -287,21 +386,63 @@ pub async fn main_process() {
                             println!("scroll more!");
                         }
                     } else if &name == "key_down" || &name == "key_up" {
-                        let _code = values.next().unwrap();
-                        let key = values.next().unwrap();
-                        let key_char = key.chars().nth(0);
+                        // TODO handle comma separately!
+                        let code = values.next().unwrap();
+                        let key_str = values.next().unwrap();
+                        let key_char = key_str.chars().nth(0);
 
-                        if let Some(key_char) = key_char {
-                            let enigo_key = Key::Layout(key_char);
+                        /* if code == "ControlLeft" {
+                            println!("ControlLeft skipped");
+                            continue;
+                        } */
 
+                        if code == "AltRight" {
+                            {
+                                let mut altgr_pressed_ref = KEYBOARD_ALTGR_PRESSED.lock().unwrap();
+                                if &name == "key_down" {
+                                    println!("Altgr pressed");
+                                    *altgr_pressed_ref = true;
+                                } else {
+                                    println!("Altgr released");
+                                    *altgr_pressed_ref = false;
+                                }
+                            }
+                            continue;
+                        }
+
+                        let key;
+                        if let Some(k) = code_to_key.get(code) {
+                            key = Some(*k);
+                        } else if let Some(key_char) = key_char {
+                            key = Some(Key::Layout(key_char));
+                        } else {
+                            println!("Unknown key");
+                            key = None;
+                        }
+
+                        if let Some(key) = key {
                             if &name == "key_down" {
-                                println!("key down");
-                                enigo.key_down(enigo_key);
+                                {
+                                    let altgr_pressed = KEYBOARD_ALTGR_PRESSED.lock().unwrap();
+                                    if *altgr_pressed.deref() && key_str.len() == 1 {
+                                        println!("{} sequence", key_str);
+                                        enigo.key_up(Key::LControl);
+                                        enigo.key_sequence(key_str);
+                                        // TODO key down LContorl?
+                                    } else {
+                                        println!("{:?} down", key);
+                                        enigo.key_down(key);
+                                    }
+                                }
+                                //println!("({})", key_str);
+                                //enigo.key_down(key);
+                                //enigo.key_sequence(key_str);
                             } else {
-                                println!("key up");
-                                enigo.key_up(enigo_key);
+                                println!("{:?} up", key);
+                                enigo.key_up(key);
                             }
                         }
+                        
 
 
                     } else {
