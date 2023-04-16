@@ -1,6 +1,8 @@
 mod datachannel;
 use std::{sync::{Arc}, time::{UNIX_EPOCH, SystemTime}, str::Split, thread, collections::HashMap};
 use enigo::{Enigo, MouseControllable, MouseButton, Key, KeyboardControllable};
+use rdev::{simulate, Button, EventType, Key as Key2, SimulateError};
+use std::{time};
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use lazy_static::__Deref;
 use crate::main_process::datachannel::{process_datachannel_messages, MouseOffset, PostSleepData};
@@ -175,26 +177,294 @@ fn handle_wheel(mut values: Split<&str>, enigo_handler_tx: SyncSender<String>) {
     }
 }
 
+fn send(event_type: &EventType) {
+    let delay = time::Duration::from_millis(20);
+    match simulate(event_type) {
+        Ok(()) => (),
+        Err(SimulateError) => {
+            println!("We could not send {:?}", event_type);
+        }
+    }
+    // Let ths OS catchup (at least MacOS)
+    //if cfg!(linux) {
+        //println!("LINUX");
+        //thread::sleep(delay);
+    //}
+}
+
 fn handle_keydown(mut values: Split<&str>, enigo_handler_tx: SyncSender<String>) {
+    // TODO make sutre there is at least 20 ms between kay presses (even on rdev)
+    // https://github.com/enigo-rs/enigo/issues/105
+
+
     let code = values.next().unwrap();
     let key = values.next().unwrap();
 
+    let rdev_code_to_key = HashMap::from([
+        ("AltLeft", Key2::Alt),
+        ("AltRight", Key2::AltGr),
+        ("Backspace", Key2::Backspace),
+        ("CapsLock", Key2::CapsLock),
+        ("ControlLeft", Key2::ControlLeft),
+        ("ControlRight", Key2::ControlRight),
+        ("Delete", Key2::Delete),
+        ("ArrowDown", Key2::DownArrow),
+        ("End", Key2::End),
+        ("Escape", Key2::Escape),
+        ("F1", Key2::F1),
+        ("F10", Key2::F10),
+        ("F11", Key2::F11),
+        ("F12", Key2::F12),
+        ("F2", Key2::F2),
+        ("F3", Key2::F3),
+        ("F4", Key2::F4),
+        ("F5", Key2::F5),
+        ("F6", Key2::F6),
+        ("F7", Key2::F7),
+        ("F8", Key2::F8),
+        ("F9", Key2::F9),
+        ("Home", Key2::Home),
+        ("ArrowLeft", Key2::LeftArrow),
+        ("MetaLeft", Key2::MetaLeft),
+        ("OSLeft", Key2::MetaLeft),
+        ("MetaRight", Key2::MetaRight),
+        ("OSRight", Key2::MetaRight),
+        ("PageDown", Key2::PageDown),
+        ("PageUp", Key2::PageUp),
+        ("Enter", Key2::Return),
+        ("ArrowRight", Key2::RightArrow),
+        ("ShiftLeft", Key2::ShiftLeft),
+        ("ShiftRight", Key2::ShiftRight),
+        ("Space", Key2::Space),
+        ("Tab", Key2::Tab),
+        ("ArrowUp", Key2::UpArrow),
+        ("PrintScreen", Key2::PrintScreen),
+        ("ScrollLock", Key2::ScrollLock),
+        ("Pause", Key2::Pause),
+        ("NumLock", Key2::NumLock),
+        ("Backquote", Key2::BackQuote),
+        ("Digit1", Key2::Num1),
+        ("Digit2", Key2::Num2),
+        ("Digit3", Key2::Num3),
+        ("Digit4", Key2::Num4),
+        ("Digit5", Key2::Num5),
+        ("Digit6", Key2::Num6),
+        ("Digit7", Key2::Num7),
+        ("Digit8", Key2::Num8),
+        ("Digit9", Key2::Num9),
+        ("Digit0", Key2::Num0),
+        ("Minus", Key2::Minus),
+        ("Equal", Key2::Equal),
+        ("KeyQ", Key2::KeyQ),
+        ("KeyW", Key2::KeyW),
+        ("KeyE", Key2::KeyE),
+        ("KeyR", Key2::KeyR),
+        ("KeyT", Key2::KeyT),
+        ("KeyY", Key2::KeyY),
+        ("KeyU", Key2::KeyU),
+        ("KeyI", Key2::KeyI),
+        ("KeyO", Key2::KeyO),
+        ("KeyP", Key2::KeyP),
+        ("BracketLeft", Key2::LeftBracket),
+        ("BracketRight", Key2::RightBracket),
+        ("KeyA", Key2::KeyA),
+        ("KeyS", Key2::KeyS),
+        ("KeyD", Key2::KeyD),
+        ("KeyF", Key2::KeyF),
+        ("KeyG", Key2::KeyG),
+        ("KeyH", Key2::KeyH),
+        ("KeyJ", Key2::KeyJ),
+        ("KeyK", Key2::KeyK),
+        ("KeyL", Key2::KeyL),
+        ("Semicolon", Key2::SemiColon),
+        ("Quote", Key2::Quote),
+        ("Backslash", Key2::BackSlash),
+        ("IntlBackslash", Key2::IntlBackslash),
+        ("KeyZ", Key2::KeyZ),
+        ("KeyX", Key2::KeyX),
+        ("KeyC", Key2::KeyC),
+        ("KeyV", Key2::KeyV),
+        ("KeyB", Key2::KeyB),
+        ("KeyN", Key2::KeyN),
+        ("KeyM", Key2::KeyM),
+        ("Comma", Key2::Comma),
+        ("Period", Key2::Dot),
+        ("Slash", Key2::Slash),
+        ("Insert", Key2::Insert),
+        /* ("", Key2::KpReturn),
+        ("", Key2::KpMinus),
+        ("", Key2::KpPlus),
+        ("", Key2::KpMultiply),
+        ("", Key2::KpDivide),
+        ("", Key2::Kp0),
+        ("", Key2::Kp1),
+        ("", Key2::Kp2),
+        ("", Key2::Kp3),
+        ("", Key2::Kp4),
+        ("", Key2::Kp5),
+        ("", Key2::Kp6),
+        ("", Key2::Kp7),
+        ("", Key2::Kp8),
+        ("", Key2::Kp9),
+        ("", Key2::KpDelete), */
+        ("Fn", Key2::Function), // Frontend does not fire this event actually, unless maybe on Firefox Android?
+    ]);
+
+
+
     let command = format!("key_down,{},{}", code, key);
-    match enigo_handler_tx.send(command) {
+    println!("{}", command);
+
+    // At least Windows fires extra ControlLeft with AltGr event
+    // https://bugzilla.mozilla.org/show_bug.cgi?id=900750
+    // If not this, @ would not work
+    if code == "AltRight" {
+        println!("RELEASING ControlLeft");
+        send(&EventType::KeyRelease(Key2::ControlLeft));
+    }
+
+    let key = rdev_code_to_key.get(code);
+    match key {
+        Some(key) => send(&EventType::KeyPress(*key)),
+        None => println!("Unknown code: {}", code),
+    }
+    
+
+    /* match enigo_handler_tx.send(command) {
         Ok(_) => (),
         Err(e) => println!("Could not send Enigo close: {}", e),
-    }
+    } */
 }
 
 fn handle_keyup(mut values: Split<&str>, enigo_handler_tx: SyncSender<String>) {
+    let rdev_code_to_key = HashMap::from([
+        ("AltLeft", Key2::Alt),
+        ("AltRight", Key2::AltGr),
+        ("Backspace", Key2::Backspace),
+        ("CapsLock", Key2::CapsLock),
+        ("ControlLeft", Key2::ControlLeft),
+        ("ControlRight", Key2::ControlRight),
+        ("Delete", Key2::Delete),
+        ("ArrowDown", Key2::DownArrow),
+        ("End", Key2::End),
+        ("Escape", Key2::Escape),
+        ("F1", Key2::F1),
+        ("F10", Key2::F10),
+        ("F11", Key2::F11),
+        ("F12", Key2::F12),
+        ("F2", Key2::F2),
+        ("F3", Key2::F3),
+        ("F4", Key2::F4),
+        ("F5", Key2::F5),
+        ("F6", Key2::F6),
+        ("F7", Key2::F7),
+        ("F8", Key2::F8),
+        ("F9", Key2::F9),
+        ("Home", Key2::Home),
+        ("ArrowLeft", Key2::LeftArrow),
+        ("MetaLeft", Key2::MetaLeft),
+        ("OSLeft", Key2::MetaLeft),
+        ("MetaRight", Key2::MetaRight),
+        ("OSRight", Key2::MetaRight),
+        ("PageDown", Key2::PageDown),
+        ("PageUp", Key2::PageUp),
+        ("Enter", Key2::Return),
+        ("ArrowRight", Key2::RightArrow),
+        ("ShiftLeft", Key2::ShiftLeft),
+        ("ShiftRight", Key2::ShiftRight),
+        ("Space", Key2::Space),
+        ("Tab", Key2::Tab),
+        ("ArrowUp", Key2::UpArrow),
+        ("PrintScreen", Key2::PrintScreen),
+        ("ScrollLock", Key2::ScrollLock),
+        ("Pause", Key2::Pause),
+        ("NumLock", Key2::NumLock),
+        ("Backquote", Key2::BackQuote),
+        ("Digit1", Key2::Num1),
+        ("Digit2", Key2::Num2),
+        ("Digit3", Key2::Num3),
+        ("Digit4", Key2::Num4),
+        ("Digit5", Key2::Num5),
+        ("Digit6", Key2::Num6),
+        ("Digit7", Key2::Num7),
+        ("Digit8", Key2::Num8),
+        ("Digit9", Key2::Num9),
+        ("Digit0", Key2::Num0),
+        ("Minus", Key2::Minus),
+        ("Equal", Key2::Equal),
+        ("KeyQ", Key2::KeyQ),
+        ("KeyW", Key2::KeyW),
+        ("KeyE", Key2::KeyE),
+        ("KeyR", Key2::KeyR),
+        ("KeyT", Key2::KeyT),
+        ("KeyY", Key2::KeyY),
+        ("KeyU", Key2::KeyU),
+        ("KeyI", Key2::KeyI),
+        ("KeyO", Key2::KeyO),
+        ("KeyP", Key2::KeyP),
+        ("BracketLeft", Key2::LeftBracket),
+        ("BracketRight", Key2::RightBracket),
+        ("KeyA", Key2::KeyA),
+        ("KeyS", Key2::KeyS),
+        ("KeyD", Key2::KeyD),
+        ("KeyF", Key2::KeyF),
+        ("KeyG", Key2::KeyG),
+        ("KeyH", Key2::KeyH),
+        ("KeyJ", Key2::KeyJ),
+        ("KeyK", Key2::KeyK),
+        ("KeyL", Key2::KeyL),
+        ("Semicolon", Key2::SemiColon),
+        ("Quote", Key2::Quote),
+        ("Backslash", Key2::BackSlash),
+        ("IntlBackslash", Key2::IntlBackslash),
+        ("KeyZ", Key2::KeyZ),
+        ("KeyX", Key2::KeyX),
+        ("KeyC", Key2::KeyC),
+        ("KeyV", Key2::KeyV),
+        ("KeyB", Key2::KeyB),
+        ("KeyN", Key2::KeyN),
+        ("KeyM", Key2::KeyM),
+        ("Comma", Key2::Comma),
+        ("Period", Key2::Dot),
+        ("Slash", Key2::Slash),
+        ("Insert", Key2::Insert),
+        /* ("", Key2::KpReturn),
+        ("", Key2::KpMinus),
+        ("", Key2::KpPlus),
+        ("", Key2::KpMultiply),
+        ("", Key2::KpDivide),
+        ("", Key2::Kp0),
+        ("", Key2::Kp1),
+        ("", Key2::Kp2),
+        ("", Key2::Kp3),
+        ("", Key2::Kp4),
+        ("", Key2::Kp5),
+        ("", Key2::Kp6),
+        ("", Key2::Kp7),
+        ("", Key2::Kp8),
+        ("", Key2::Kp9),
+        ("", Key2::KpDelete), */
+        ("Fn", Key2::Function), // Frontend does not fire this event actually, unless maybe on Firefox Android?
+    ]);
+    
     let code = values.next().unwrap();
     let key = values.next().unwrap();
 
     let command = format!("key_up,{},{}", code, key);
-    match enigo_handler_tx.send(command) {
+    println!("{}", command);
+    
+    let key = rdev_code_to_key.get(code);
+    match key {
+        Some(key) => send(&EventType::KeyRelease(*key)),
+        None => println!("Unknown code: {}", code),
+    }
+
+
+
+    /* match enigo_handler_tx.send(command) {
         Ok(_) => (),
         Err(e) => println!("Could not send Enigo close: {}", e),
-    }
+    } */
 }
 
 pub async fn main_process() {
@@ -202,6 +472,7 @@ pub async fn main_process() {
     let (enigo_handler_tx, rx) : (SyncSender<String>, Receiver<String>) = sync_channel(ENIGO_MESSAGE_BUFFER_SIZE);
     let enigo_handler = thread::spawn(move || {
         let mut enigo = Enigo::new();
+        
         // https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_code_values
         // https://source.chromium.org/chromium/chromium/src/+/main:ui/events/keycodes/dom/dom_code_data.inc;l=344;drc=3344b61f7c7f06cf96069751c3bd64d8ec3e3428
         let code_to_key = HashMap::from([
