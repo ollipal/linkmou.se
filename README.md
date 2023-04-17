@@ -10,7 +10,6 @@ This template should help get you started developing with Tauri, Solid and Types
 
 To install:
 
-Needs: sudo apt install libxdo-dev (enigo)
 Might need: sudo apt install libx11-dev (device_query)
 
 To run cli:

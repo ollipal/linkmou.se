@@ -4,9 +4,6 @@
 #[macro_use]
 extern crate lazy_static;
 
-use rdev::display_size;
-use rdev::EventType::MouseMove;
-use rdev::{listen, Event};
 use serde::Serialize;
 use tauri::{App, CustomMenuItem, SystemTray, SystemTrayMenu};
 
@@ -14,22 +11,15 @@ use tauri::{App, CustomMenuItem, SystemTray, SystemTrayMenu};
 mod main_process;
 use crate::main_process::main_process;
 
-// Use enigo main_display_size when it will be available: https://github.com/enigo-rs/enigo/pull/79
 
 /* use std::sync::Mutex; */
 use std::thread;
-use tauri::Manager; // Required to access app in 'setup'
-/* use tauri::State; */
 
 /* mod datachannel;
 use crate::datachannel::create_data_channel;
 
 mod background_loop;
 use crate::background_loop::start_background_loop; */
-
-/* struct TauriState {
-    enigo: Mutex<Enigo>,
-} */
 
 #[derive(Clone, Serialize)]
 struct SystemEvent {
@@ -54,87 +44,6 @@ fn mouse_move_relative(_x: i32,_y: i32, /* devices: State<TauriState> */) {
 
 fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
     let app_handle = app.handle();
-    let (display_width_u64, display_height_u64) = display_size().unwrap();
-    assert!(display_width_u64 > 0);
-    assert!(display_height_u64 > 0);
-    let display_width = display_width_u64 as f64;
-    let display_height = display_height_u64 as f64;
-    println!("Width: {} Height: {}", display_width, display_height);
-
-    thread::spawn(move || {
-        // Not sure why this did not work...
-        /* fn send_system_event(app_handle: AppHandle, system_event: SystemEvent) -> std::option::Option<()> {
-            app_handle
-                .emit_all("system_event", system_event)
-                .map_err(|err| println!("{:?}", err))
-                .ok()
-        } */
-
-        let callback = move |event: Event| {
-            match event.event_type {
-                MouseMove { x, y } => {
-                    if x < 1.0 {
-                        app_handle
-                            .emit_all(
-                                "system_event",
-                                SystemEvent {
-                                    name: "ScreenLeft".to_string(),
-                                    x: x as u64,
-                                    y: y as u64,
-                                },
-                            )
-                            .map_err(|err| println!("{:?}", err))
-                            .ok();
-                    } else if x > display_width as f64 - 2.0 {
-                        app_handle
-                            .emit_all(
-                                "system_event",
-                                SystemEvent {
-                                    name: "ScreenRight".to_string(),
-                                    x: x as u64,
-                                    y: y as u64,
-                                },
-                            )
-                            .map_err(|err| println!("{:?}", err))
-                            .ok();
-                    } else if y < 1.0 {
-                        // Top will be missed if left or right as well
-                        app_handle
-                            .emit_all(
-                                "system_event",
-                                SystemEvent {
-                                    name: "ScreenTop".to_string(),
-                                    x: x as u64,
-                                    y: y as u64,
-                                },
-                            )
-                            .map_err(|err| println!("{:?}", err))
-                            .ok();
-                    } else if y > display_height as f64 - 2.0 {
-                        // Bottom will be missed if left or right as well
-                        app_handle
-                            .emit_all(
-                                "system_event",
-                                SystemEvent {
-                                    name: "ScreenBottom".to_string(),
-                                    x: x as u64,
-                                    y: y as u64,
-                                },
-                            )
-                            .map_err(|err| println!("{:?}", err))
-                            .ok();
-                    }
-                }
-                _ => (),
-            }
-            ()
-        };
-
-        // This will block.
-        if let Err(error) = listen(callback) {
-            println!("Error: {:?}", error)
-        }
-    });
     Ok(())
 }
 
@@ -149,24 +58,6 @@ async fn main() {
                 main_process().await;
             });
     });
-        
-    //start_background_loop();
-
-    /* let (
-           mut socket,
-           response
-       )= connect(Url::parse(url).unwrap()).expect("Can't connect");
-       println!("Connected to the server");
-       println!("Response HTTP code: {}", response.status());
-       println!("Response contains the following headers:");
-       for (ref header, _value) in response.headers() {
-           println!("* {}", header);
-       }
-    */
-
-    //let _ = create_data_channel().await;
-    println!("DATACHANNEL CREATED ENDED");
-
     let open = CustomMenuItem::new("open".to_string(), "Open");
     let quit = CustomMenuItem::new("quit".to_string(), "Quit");
 
