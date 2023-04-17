@@ -1,12 +1,15 @@
 mod datachannel;
 use std::{sync::{Arc}, time::{UNIX_EPOCH, SystemTime, self}, str::Split, thread, collections::HashMap};
 use enigo::{Enigo, MouseControllable};
-use rdev::{simulate, Button, EventType, Key as Key2, SimulateError};
+use rdev::{/* simulate,  */Button, EventType, Key as Key2, SimulateError};
 //use webrtc::data_channel::RTCDataChannel;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use lazy_static::__Deref;
 use crate::main_process::datachannel::{process_datachannel_messages, MouseOffset, PostSleepData};
 use copypasta::{ClipboardContext, ClipboardProvider};
+
+mod rdev_horizontal_wheel_fix;
+use crate::main_process::rdev_horizontal_wheel_fix::{simulate};
 
 const MOUSE_ROLLING_AVG_MULT : f64 = 0.025;
 const MOUSE_TOO_SLOW : f64 = 1.05;
@@ -19,8 +22,9 @@ lazy_static! {
     static ref MOUSE_OFFSET_FROM_REAL: Arc<std::sync::Mutex<MouseOffset>> = Arc::new(std::sync::Mutex::new(MouseOffset { x: 0, y: 0 }));
     static ref MOUSE_LATEST_NANO: Arc<std::sync::Mutex<Option<u128>>> = Arc::new(std::sync::Mutex::new(None));
     static ref MOUSE_ROLLING_AVG_UPDATE_INTERVAL: Arc<std::sync::Mutex<u128>> = Arc::new(std::sync::Mutex::new(1000000000/60)); // Assume 60 updates/second at the start
-    static ref WHEEL_SUB_LINE_X: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
-    static ref WHEEL_SUB_LINE_Y: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
+    static ref WHEEL_SUB_PIXEL_X: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
+    static ref LINUX_WHEEL_SUB_PIXEL_X: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
+    static ref WHEEL_SUB_PIXEL_Y: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
     static ref KEYBOARD_ALTGR_PRESSED: Arc<std::sync::Mutex<bool>> = Arc::new(std::sync::Mutex::new(false));
 }
 
@@ -236,25 +240,26 @@ fn handle_wheel(mut values: Split<&str>) {
 
     let full_pixels_x;
     {
-        let mut wheel_sub_line_ref = WHEEL_SUB_LINE_X.lock().unwrap();
-        let combined = x + wheel_sub_line_ref.deref();
+        let mut wheel_sub_pixel_ref = WHEEL_SUB_PIXEL_X.lock().unwrap();
+        let combined = x + wheel_sub_pixel_ref.deref();
         full_pixels_x = (combined / 1.0) as i64;
-        *wheel_sub_line_ref = combined % 1.0;
-        //println!("reminder x {}", wheel_sub_line_ref.deref());
+        *wheel_sub_pixel_ref = combined % 1.0;
+        //println!("reminder x {}", wheel_sub_pixel_ref.deref());
     }
 
     let full_pixels_y;
     {
-        let mut wheel_sub_line_ref = WHEEL_SUB_LINE_Y.lock().unwrap();
-        let combined = y + wheel_sub_line_ref.deref();
+        let mut wheel_sub_pixel_ref = WHEEL_SUB_PIXEL_Y.lock().unwrap();
+        let combined = y + wheel_sub_pixel_ref.deref();
         full_pixels_y = (combined / 1.0) as i64;
-        *wheel_sub_line_ref = combined % 1.0;
-        //println!("reminder y {}", wheel_sub_line_ref.deref());
+        *wheel_sub_pixel_ref = combined % 1.0;
+        //println!("reminder y {}", wheel_sub_pixel_ref.deref());
     }
 
     if full_pixels_x != 0 || full_pixels_y != 0 {
+        println!("wheel x:{} y:{}", -full_pixels_x, -full_pixels_y);
         send(&EventType::Wheel {
-            delta_x: -full_pixels_x,
+            delta_x: full_pixels_x,
             delta_y: -full_pixels_y,
         });
     } else {
