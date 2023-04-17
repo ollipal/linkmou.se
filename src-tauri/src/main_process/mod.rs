@@ -7,10 +7,7 @@ use crate::main_process::datachannel::{process_datachannel_messages, MouseOffset
 use copypasta::{ClipboardContext, ClipboardProvider};
 use rdev::display_size;
 use rdev::EventType::{MouseMove};
-use rdev::{listen, Event};
-
-mod rdev_horizontal_wheel_fix;
-use crate::main_process::rdev_horizontal_wheel_fix::{simulate};
+use rdev::{listen, simulate, Event};
 
 struct MousePosition {
     x: f64,
@@ -26,7 +23,6 @@ const MOUSE_ROLLING_AVG_MULT : f64 = 0.025;
 const MOUSE_TOO_SLOW : f64 = 1.05;
 const MOUSE_TOO_FAST : f64 = 0.95;
 const WHEEL_LINE_IN_PIXELS: f64 = 17.0; // DOM_DELTA_LINE in chromiun 2023, https://stackoverflow.com/a/37474225  
-const CLOSE: &str = "CLOSE";
 
 lazy_static! {
     static ref WINDOW_SIZE: Arc<std::sync::Mutex<WindowSize>> = Arc::new(std::sync::Mutex::new(WindowSize { x: 0.0, y: 0.0 }));

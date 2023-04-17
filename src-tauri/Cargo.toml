@@ -16,7 +16,7 @@ tauri-build = { version = "1.2", features = [] }
 tauri = { version = "1.2", features = ["shell-open", "system-tray"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-rdev = "0.5.2"
+rdev = { git = "https://github.com/Narsil/rdev.git", rev = "4aa8ef8" } # Fix for linux scrolling
 webrtc = "0.7.1"
 tokio = "1.26.0"
 signal = { path = "signal" }
