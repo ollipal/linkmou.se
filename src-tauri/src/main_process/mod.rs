@@ -23,6 +23,7 @@ const MOUSE_ROLLING_AVG_MULT : f64 = 0.025;
 const MOUSE_TOO_SLOW : f64 = 1.05;
 const MOUSE_TOO_FAST : f64 = 0.95;
 const WHEEL_LINE_IN_PIXELS: f64 = 17.0; // DOM_DELTA_LINE in chromiun 2023, https://stackoverflow.com/a/37474225  
+const MOUSE_JUMP_DISTANCE: f64 = 5.0;
 
 lazy_static! {
     static ref WINDOW_SIZE: Arc<std::sync::Mutex<WindowSize>> = Arc::new(std::sync::Mutex::new(WindowSize { x: 0.0, y: 0.0 }));
@@ -232,6 +233,8 @@ fn mouse_move_relative(delta_x: f64, delta_y: f64) {
         }
     }
     send(&EventType::MouseMove { x, y });
+
+    //TODO check if on side, and send response to the fornt end if yes
 }
 
 fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData/* , enigo_handler_tx: SyncSender<String> */) -> (Option<u128>, PostSleepData) {
@@ -461,6 +464,15 @@ fn handle_paste(mut values: Split<&str>) {
     println!("Pasted {}!", data);
 }
 
+
+fn handle_leftjump(mut values: Split<&str>) {
+    let height = values.next().unwrap().parse::<f64>().unwrap();
+    let window_size = WINDOW_SIZE.lock().unwrap();
+    assert!(window_size.x >= MOUSE_JUMP_DISTANCE);   
+    //println!("{:?}", EventType::MouseMove { x: window_size.x - MOUSE_JUMP_DISTANCE, y: window_size.y * height }); 
+    send(&EventType::MouseMove { x: window_size.x - MOUSE_JUMP_DISTANCE, y: window_size.y * height });
+}
+
 pub async fn main_process() {
     let (display_width_u64, display_height_u64) = display_size().unwrap();
     assert!(display_width_u64 > 0);
@@ -533,6 +545,8 @@ pub async fn main_process() {
             sleep_amount = Some(50 * 1000000);
         } else if &name == "paste" {
             handle_paste(values);
+        } else if &name == "leftjump" {
+            handle_leftjump(values);
         } else {
             println!("Unknown event.name: {}", name);
         }
