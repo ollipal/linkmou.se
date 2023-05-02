@@ -481,6 +481,11 @@ fn handle_leftjump(mut values: Split<&str>) {
     send(&EventType::MouseMove { x: window_size.x - MOUSE_JUMP_DISTANCE, y: window_size.y * height });
 }
 
+fn handle_mousehide() {
+    let window_size = WINDOW_SIZE.lock().unwrap();
+    send(&EventType::MouseMove { x: window_size.x / 2.0 + 1.0, y: window_size.y });
+}
+
 pub async fn main_process() {
     let (display_width_u64, display_height_u64) = display_size().unwrap();
     assert!(display_width_u64 > 0);
@@ -557,6 +562,8 @@ pub async fn main_process() {
             handle_paste(values);
         } else if &name == "leftjump" {
             handle_leftjump(values);
+        } else if &name == "mousehide" {
+            handle_mousehide();
         } else {
             println!("Unknown event.name: {}", name);
         }
