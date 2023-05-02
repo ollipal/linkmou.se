@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::{AppSettings, Arg, Command};
 use futures::{FutureExt};
 use serde::{Serialize, Deserialize};
+use std::fmt::format;
 use std::io::Write;
 use std::sync::mpsc::SyncSender;
 use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
@@ -54,6 +55,8 @@ pub struct MouseOffset {
 pub struct PostSleepData {
     pub name: String,
     pub mouse_offset: MouseOffset,
+    pub is_right: bool,
+    pub side_position: f64,
 }
 
 fn handle_copy_cut() -> String{
@@ -438,6 +441,12 @@ where
                 let d_clone2 = d_clone.clone();
 
                 Box::pin(async move {
+                    if post_sleep_data.is_right {
+                        if let Err(e) = d_clone2.send_text(format!("mouseright,{}", post_sleep_data.side_position).to_string()).await {
+                            println!("Sending failed: {}", e);
+                        };
+                    }
+
                     if let Some(sleep_amount) = sleep_amount {
                         if post_sleep_data.name == "mousemove" && post_sleep_data.mouse_offset.x == 0 && post_sleep_data.mouse_offset.y == 0 {
                             println!("Zero move sleep skipped")

@@ -208,7 +208,9 @@ fn update_mouse_position(x: f64, y: f64) {
     }
 }
 
-fn mouse_move_relative(delta_x: f64, delta_y: f64) {
+fn mouse_move_relative(delta_x: f64, delta_y: f64) -> (bool, f64) {
+    let mut is_right = false;
+    let mut side_position = 0.0;
     let (x, y);
     {
         let mouse_position = MOUSE_LATEST_POS.lock().unwrap();
@@ -231,10 +233,15 @@ fn mouse_move_relative(delta_x: f64, delta_y: f64) {
         } else {
             y = new_y;
         }
+    
+        if x > window_size.x as f64 - 2.0 {
+            println!("RELATIVE ScreenRight");
+            is_right = true;
+            side_position = y / window_size.y;
+        }
     }
     send(&EventType::MouseMove { x, y });
-
-    //TODO check if on side, and send response to the fornt end if yes
+    return (is_right, side_position);
 }
 
 fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData/* , enigo_handler_tx: SyncSender<String> */) -> (Option<u128>, PostSleepData) {
@@ -263,7 +270,9 @@ fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData/
     }
 
     // Move mouse
-    mouse_move_relative(offset_x.into(), offset_y.into());
+    let (is_right, side_position) = mouse_move_relative(offset_x.into(), offset_y.into());
+    post_sleep_data.is_right = is_right;
+    post_sleep_data.side_position = side_position;
 
     // Update latest mouse nano and save the difference to the previous
     let now = get_epoch_nanos();
@@ -464,7 +473,6 @@ fn handle_paste(mut values: Split<&str>) {
     println!("Pasted {}!", data);
 }
 
-
 fn handle_leftjump(mut values: Split<&str>) {
     let height = values.next().unwrap().parse::<f64>().unwrap();
     let window_size = WINDOW_SIZE.lock().unwrap();
@@ -524,6 +532,8 @@ pub async fn main_process() {
                 x: 0,
                 y: 0
             },
+            is_right: false,
+            side_position: 0.0,
         };
 
         if &name == "mousemove" {
