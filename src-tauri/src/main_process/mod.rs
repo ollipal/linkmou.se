@@ -14,6 +14,13 @@ struct MousePosition {
     y: f64,
 }
 
+struct MouseHasBeenCenter {
+    top: bool,
+    left: bool,
+    right: bool,
+    bottom: bool,
+}
+
 struct WindowSize {
     x: f64,
     y: f64,
@@ -22,8 +29,9 @@ struct WindowSize {
 const MOUSE_ROLLING_AVG_MULT : f64 = 0.025;
 const MOUSE_TOO_SLOW : f64 = 1.05;
 const MOUSE_TOO_FAST : f64 = 0.95;
+const MOUSE_JUMP_DISTANCE: f64 = 5.0; // Distance from side when jumped
+const MOUSE_CENTER_DISTANCE: f64 = 35.0; // Distance from side considered to have been "center"
 const WHEEL_LINE_IN_PIXELS: f64 = 17.0; // DOM_DELTA_LINE in chromiun 2023, https://stackoverflow.com/a/37474225  
-const MOUSE_JUMP_DISTANCE: f64 = 5.0;
 
 lazy_static! {
     static ref WINDOW_SIZE: Arc<std::sync::Mutex<WindowSize>> = Arc::new(std::sync::Mutex::new(WindowSize { x: 0.0, y: 0.0 }));
@@ -31,6 +39,7 @@ lazy_static! {
     static ref MOUSE_OFFSET_FROM_REAL: Arc<std::sync::Mutex<MouseOffset>> = Arc::new(std::sync::Mutex::new(MouseOffset { x: 0, y: 0 }));
     static ref MOUSE_LATEST_NANO: Arc<std::sync::Mutex<Option<u128>>> = Arc::new(std::sync::Mutex::new(None));
     static ref MOUSE_ROLLING_AVG_UPDATE_INTERVAL: Arc<std::sync::Mutex<u128>> = Arc::new(std::sync::Mutex::new(1000000000/60)); // Assume 60 updates/second at the start
+    static ref MOUSE_HAS_BEEN_CENTER: Arc<std::sync::Mutex<MouseHasBeenCenter>> = Arc::new(std::sync::Mutex::new(MouseHasBeenCenter { top: false, left: false, right: false, bottom: false }));
     static ref WHEEL_SUB_PIXEL_X: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
     static ref WHEEL_SUB_PIXEL_Y: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
 
@@ -234,10 +243,24 @@ fn mouse_move_relative(delta_x: f64, delta_y: f64) -> (bool, f64) {
             y = new_y;
         }
     
-        if x > window_size.x as f64 - 2.0 {
+        if x > window_size.x - 2.0 {
             println!("RELATIVE ScreenRight");
-            is_right = true;
-            side_position = y / window_size.y;
+            {
+                let mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
+                if mouse_has_been_center_ref.left {
+                    is_right = true;
+                    side_position = y / window_size.y;
+                } else {
+                    println!("Has not been center yet")
+                }
+            }
+
+        } else if x < window_size.x - MOUSE_CENTER_DISTANCE {
+            let mut mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
+            if !mouse_has_been_center_ref.left {
+                mouse_has_been_center_ref.left = true;
+                println!("Left Center")
+            }
         }
     }
     send(&EventType::MouseMove { x, y });
@@ -474,6 +497,10 @@ fn handle_paste(mut values: Split<&str>) {
 }
 
 fn handle_leftjump(mut values: Split<&str>) {
+    {
+        let mut mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
+        mouse_has_been_center_ref.left = false;
+    }
     let height = values.next().unwrap().parse::<f64>().unwrap();
     let window_size = WINDOW_SIZE.lock().unwrap();
     assert!(window_size.x >= MOUSE_JUMP_DISTANCE);   
