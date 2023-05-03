@@ -5,7 +5,7 @@
 extern crate lazy_static;
 
 use serde::Serialize;
-use tauri::{App, CustomMenuItem, SystemTray, SystemTrayMenu};
+use tauri::{App/* , CustomMenuItem, SystemTray, SystemTrayMenu */};
 use std::sync::mpsc::{channel};
 
 mod main_process;
@@ -50,7 +50,7 @@ fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
 fn main() {
     let (send_stop_1, recv_stop_1) = channel();
     let (send_stop_2, recv_stop_2) = channel();
-    let (send_stop_3, mut recv_stop_3) = tokio::sync::mpsc::channel::<()>(1);
+    let (send_stop_3, recv_stop_3) = tokio::sync::mpsc::channel::<()>(1);
     //let (send_stop_4, recv_stop_4) = channel();
     let (send_finished, recv_finished) = channel();
 
@@ -72,14 +72,14 @@ fn main() {
             });
     });
 
-    let open = CustomMenuItem::new("open".to_string(), "Open");
+    /* let open = CustomMenuItem::new("open".to_string(), "Open");
     let quit = CustomMenuItem::new("quit".to_string(), "Quit");
 
     let tray_menu = SystemTrayMenu::new().add_item(open).add_item(quit);
-    let tray = SystemTray::new().with_menu(tray_menu);
+    let tray = SystemTray::new().with_menu(tray_menu); */
 
     tauri::Builder::default()
-        .system_tray(tray)
+        /* .system_tray(tray) */
         .setup(|app| setup(app))
         /* .manage(TauriState {
             enigo: Default::default(),
