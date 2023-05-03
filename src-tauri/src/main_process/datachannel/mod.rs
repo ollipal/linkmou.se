@@ -1,10 +1,9 @@
 use anyhow::Result;
-use clap::{AppSettings, Arg, Command};
 use futures::{FutureExt};
-use lazy_static::__Deref;
+/* use lazy_static::__Deref; */
 use serde::{Serialize, Deserialize};
-use std::fmt::format;
-use std::io::Write;
+/* use std::fmt::format;
+use std::io::Write; */
 use std::sync::mpsc::{SyncSender, Receiver};
 use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use serde_json::json;
@@ -272,32 +271,7 @@ where
     F: FnOnce(String) -> (Option<u128>, PostSleepData) + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
     G: FnOnce(PostSleepData) -> () + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
 {
-    let mut app = Command::new("Answer")
-        .version("0.1.0")
-        .author("Olli Paloviita")
-        .about("browserkwm answer")
-        .setting(AppSettings::DeriveDisplayOrder)
-        .subcommand_negates_reqs(true)
-        .arg(
-            Arg::new("FULLHELP")
-                .help("Prints more detailed help information")
-                .long("fullhelp"),
-        )
-        .arg(
-            Arg::new("debug")
-                .long("debug")
-                .short('d')
-                .help("Prints debug log information"),
-        );
-
-    let matches = app.clone().get_matches();
-
-    if matches.is_present("FULLHELP") {
-        app.print_long_help().unwrap();
-        std::process::exit(0);
-    }
-
-    let debug = matches.is_present("debug");
+    /* let debug = matches.is_present("debug");
     if debug {
         env_logger::Builder::new()
             .format(|buf, record| {
@@ -313,7 +287,7 @@ where
             })
             .filter(None, log::LevelFilter::Trace)
             .init();
-    }
+    } */
 
     // Prepare the configuration
     let config = RTCConfiguration {

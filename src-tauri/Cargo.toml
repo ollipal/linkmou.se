@@ -13,27 +13,17 @@ edition = "2021"
 tauri-build = { version = "1.2", features = [] }
 
 [dependencies]
-tauri = { version = "1.2", features = ["shell-open", "system-tray"] }
+tauri = { version = "1.2" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rdev = { git = "https://github.com/Narsil/rdev.git", rev = "4aa8ef8" } # Fix for linux scrolling
 webrtc = "0.7.1"
 tokio = "1.26.0"
-signal = { path = "signal" }
 anyhow = "1.0.69"
-bytes = "1.4.0"
-rust_socketio = "0.4.1"
 tungstenite = {version = "0.18.0", features = ["native-tls"] }
-url = "2.3.1"
-clap = "3.0" # not necessary?
-lazy_static = "1.4.0" # not necessary?
-env_logger = "0.10.0" # not necessary?
-chrono = "0.4.24" # not necessary?
-log = "0.4.17" # not necessary?
-tokio-util = "0.7.7" # not necessary?
+lazy_static = "1.4.0"
 tokio-tungstenite = {version = "0.18.0", features = ["native-tls"] }
 futures-util = "0.3.27"
-futures-channel = "0.3.27"
 futures = "0.3.28"
 copypasta = "0.8.2"
 
