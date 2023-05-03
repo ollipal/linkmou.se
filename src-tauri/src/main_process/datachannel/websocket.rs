@@ -145,7 +145,11 @@ async fn wait(duration: u64) {
     sleep(Duration::from_millis(duration)).await;
 }
 
-pub async fn start_send_receive_thread<C>(mut websocket: WebSocket, recipient: &String, on_ws_receive: C) -> (tokio::task::JoinHandle<()>, SyncSender<std::string::String>)
+pub async fn start_send_receive_thread<C>(
+    mut websocket: WebSocket,
+    recipient: &String,
+    on_ws_receive: C,
+) -> (tokio::task::JoinHandle<()>, SyncSender<std::string::String>)
 where
     C: FnOnce(String) -> BoxFuture<'static, ()> + 'static + std::marker::Copy + std::marker::Send,
     // BoxFuture tip from here: https://www.bitfalter.com/async-closures

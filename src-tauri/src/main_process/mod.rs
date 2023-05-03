@@ -1,5 +1,5 @@
 mod datachannel;
-use std::{sync::{Arc}, time::{UNIX_EPOCH, SystemTime, self}, str::Split, thread, collections::HashMap};
+use std::{sync::{Arc}, time::{UNIX_EPOCH, SystemTime, self}, str::Split, thread, collections::HashMap, panic};
 use rdev::{/* simulate,  */Button, EventType, Key as Key2, SimulateError};
 //use webrtc::data_channel::RTCDataChannel;
 use lazy_static::__Deref;
@@ -8,6 +8,7 @@ use copypasta::{ClipboardContext, ClipboardProvider};
 use rdev::display_size;
 use rdev::EventType::{MouseMove};
 use rdev::{listen, simulate, Event};
+use std::sync::mpsc::{Receiver, Sender};
 
 struct MousePosition {
     x: f64,
@@ -513,7 +514,13 @@ fn handle_mousehide() {
     send(&EventType::MouseMove { x: window_size.x / 2.0 + 1.0, y: window_size.y });
 }
 
-pub async fn main_process() {
+pub async fn main_process(
+    recv_stop_1: Receiver<bool>,
+    recv_stop_2: Receiver<bool>,
+    recv_stop_3: tokio::sync::mpsc::Receiver<()>,
+    /* recv_stop_4: Receiver<bool>, */
+    send_finished: Sender<bool>,
+) {
     let (display_width_u64, display_height_u64) = display_size().unwrap();
     assert!(display_width_u64 > 0);
     assert!(display_height_u64 > 0);
@@ -524,32 +531,60 @@ pub async fn main_process() {
     update_window_size(display_width, display_height);
     update_mouse_position(display_width / 2.0, display_height / 2.0);
 
-    // TODO somehow exit and end
+    // rdev::listen cannot be stopped, catching a panic is the only workaround
+    // https://github.com/Narsil/rdev/issues/72#issuecomment-1374830094
+    let default_hook = panic::take_hook();
+    panic::set_hook(Box::new(move |panic_info| {
+        if let Some(msg) = panic_info.payload().downcast_ref::<&str>() {
+            if *msg == "LISTEN_STOP_PANIC" {
+                // Handle the spesific panic
+                return;
+            }
+        }
+
+        // If the panic message doesn't match, use the default hook
+        println!("Unknown panic caught");
+        default_hook(panic_info);
+    }));
+
     let rdev_listen_handle = thread::spawn(move || {
         let callback = move |event: Event| {
             match event.event_type {
                 MouseMove { x, y } => {
                     update_mouse_position(x,y);
-                    if x < 1.0 {
+                    /* if x < 1.0 {
                         println!("ScreenLeft");
-                    } else if x > display_width as f64 - 2.0 {
+                    } else if x > display_width - 2.0 {
                         println!("ScreenRight");
                     } else if y < 1.0 {
                         // Top will be missed if left or right as well
                         println!("ScreenTop");
-                    } else if y > display_height as f64 - 2.0 {
+                    } else if y > display_height - 2.0 {
                         // Bottom will be missed if left or right as well
                         println!("ScreenBottom");
-                    }
+                    } */
                 }
                 _ => (),
+            };
+            if let Ok(should_stop) = recv_stop_1.try_recv() {
+                if should_stop {
+                    println!("Listening stopped");
+                    panic!("LISTEN_STOP_PANIC");
+                }
             }
             ()
         };
 
-        // This will block.
-        if let Err(error) = listen(callback) {
-            println!("Error: {:?}", error)
+        let result = panic::catch_unwind(|| {
+            // This will block.
+            if let Err(error) = listen(callback) {
+                println!("Error: {:?}", error)
+            }
+        });
+
+        match result {
+            Ok(res) => res,
+            Err(_) => println!("caught panic as expected!"),
         }
     });
 
@@ -612,5 +647,20 @@ pub async fn main_process() {
         }
     };
 
-    process_datachannel_messages(on_message_immmediate, on_message_post_sleep).await;
+    process_datachannel_messages(
+        on_message_immmediate,
+        on_message_post_sleep,
+        recv_stop_2,
+        recv_stop_3,
+        /* recv_stop_4, */
+    ).await;
+
+    println!("Waiting listen to join");
+    if let Err(_e) = rdev_listen_handle.join() {
+        println!("Join thread err");
+    }
+
+    if let Err(_e) = send_finished.send(true) {
+        println!("Could not send finished");
+    }
 }

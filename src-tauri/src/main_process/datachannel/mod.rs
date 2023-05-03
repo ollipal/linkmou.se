@@ -1,10 +1,11 @@
 use anyhow::Result;
 use clap::{AppSettings, Arg, Command};
 use futures::{FutureExt};
+use lazy_static::__Deref;
 use serde::{Serialize, Deserialize};
 use std::fmt::format;
 use std::io::Write;
-use std::sync::mpsc::SyncSender;
+use std::sync::mpsc::{SyncSender, Receiver};
 use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use serde_json::json;
 use tokio::time::{sleep, Duration};
@@ -45,6 +46,7 @@ lazy_static! {
         Arc::new(Mutex::new(None));
     static ref PENDING_CANDIDATES: Arc<Mutex<Vec<RTCIceCandidate>>> = Arc::new(Mutex::new(vec![]));
     static ref TX: Arc<Mutex<Option<SyncSender<String>>>> = Arc::new(Mutex::new(None));
+    static ref RX_STOP_3: Arc<std::sync::Mutex<Option<tokio::sync::mpsc::Receiver<()>>>> = Arc::new(std::sync::Mutex::new(None));
 }
 
 pub struct MouseOffset {
@@ -97,15 +99,30 @@ async fn signal_candidate(c: &RTCIceCandidate) -> Result<()> {
 }
 
 //#[tokio::main]
-pub async fn process_datachannel_messages<F, G>(on_message_immmediate: F, on_message_post_sleep: G)
+pub async fn process_datachannel_messages<F, G>(
+    on_message_immmediate: F,
+    on_message_post_sleep: G,
+    recv_stop_2: Receiver<bool>,
+    recv_stop_3: tokio::sync::mpsc::Receiver<()>,
+    /* recv_stop_4: Receiver<bool>, */
+)
     where
         F: FnOnce(String) -> (Option<u128>, PostSleepData) + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
         G: FnOnce(PostSleepData) -> () + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
 {
-    
+    {
+        let mut rx3 = RX_STOP_3.lock().unwrap();
+        *rx3 = Some(recv_stop_3);
+    }
+
     //let background_loop_handler = thread::spawn(|| {
     let mut tries: u64 = 0;
     loop {
+        if let Ok(_should_stop) = recv_stop_2.try_recv() {
+            println!("process_datachannel_messages stopped 2");
+            break;
+        }
+
         // Print reconnections, potentially sleep
         println!("Trying to connect {}...", tries);
         sleep(Duration::from_millis(std::cmp::min(
@@ -225,7 +242,10 @@ pub async fn process_datachannel_messages<F, G>(on_message_immmediate: F, on_mes
             *tx2 = Some(tx);
         }
 
-        let result = connect_datachannel_and_process_messages(on_message_immmediate, on_message_post_sleep).await.unwrap();
+        let result = connect_datachannel_and_process_messages(
+            on_message_immmediate,
+            on_message_post_sleep,
+        ).await.unwrap();
 
         if let Err(e) = handle.await {
             println!("Handle await error {}", e);
@@ -244,7 +264,10 @@ pub async fn process_datachannel_messages<F, G>(on_message_immmediate: F, on_mes
     //});
 }
 
-async fn connect_datachannel_and_process_messages<F, G>(on_message_immmediate: F, on_message_post_sleep: G) -> Result<String>
+async fn connect_datachannel_and_process_messages<F, G>(
+    on_message_immmediate: F,
+    on_message_post_sleep: G,
+) -> Result<String>
 where
     F: FnOnce(String) -> (Option<u128>, PostSleepData) + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
     G: FnOnce(PostSleepData) -> () + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
@@ -472,6 +495,12 @@ where
         })
     }));
 
+    let mut a = {
+        let rx3_mutex = RX_STOP_3.lock();
+        rx3_mutex.unwrap()
+    };
+    let b = a.as_mut().unwrap();
+
     println!("Press ctrl-c to stop");
     let result = tokio::select! {
         _ = done_rx.recv() => {
@@ -479,6 +508,10 @@ where
             "DISCONNECT"
         }
         _ = done_rx2.recv() => {
+            println!("received done signal!");
+            "DISCONNECT"
+        }
+        _ = b.recv() => {
             println!("received done signal!");
             "DISCONNECT"
         }

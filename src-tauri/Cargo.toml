@@ -36,8 +36,6 @@ futures-util = "0.3.27"
 futures-channel = "0.3.27"
 futures = "0.3.28"
 copypasta = "0.8.2"
-[target.'cfg(target_os = "linux")'.dependencies]
-x11 = {version = "2.18", features = ["xlib", "xrecord", "xinput"] }
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem
