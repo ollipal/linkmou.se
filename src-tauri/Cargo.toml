@@ -16,7 +16,7 @@ tauri-build = { version = "1.2", features = [] }
 tauri = { version = "1.2", features = ["shell-open", "system-tray"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-rdev = { git = "https://github.com/ollipal/rdev.git", rev = "f2cd1e1" } # Fix for linux scrolling
+rdev = { git = "https://github.com/ollipal/rdev.git", rev = "13f8b32" } # Fix for linux scrolling
 webrtc = "0.7.1"
 tokio = "1.26.0"
 anyhow = "1.0.69"
