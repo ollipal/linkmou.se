@@ -2989,7 +2989,7 @@ dependencies = [
 [[package]]
 name = "rdev"
 version = "0.5.2"
-source = "git+https://github.com/ollipal/rdev.git?rev=0c8dec5#0c8dec5ad94bbd8b31b3ee5d1ee53550cc5ec63d"
+source = "git+https://github.com/ollipal/rdev.git?rev=c199e19#c199e19823481a15248b11c7d19e84e8504ba5b2"
 dependencies = [
  "cocoa 0.22.0",
  "core-foundation 0.7.0",
