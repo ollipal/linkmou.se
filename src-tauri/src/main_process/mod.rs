@@ -1,29 +1,14 @@
 mod datachannel;
 use std::{sync::{Arc}, time::{UNIX_EPOCH, SystemTime, self}, str::Split, thread, collections::HashMap, panic};
-use rdev::{/* simulate,  */Button, EventType, Key as Key2, SimulateError};
-//use webrtc::data_channel::RTCDataChannel;
+use rdev::{/* simulate,  */Button, EventType, Key, SimulateError};
 use lazy_static::__Deref;
 use crate::main_process::datachannel::{process_datachannel_messages, MouseOffset, PostSleepData};
 use copypasta::{ClipboardContext, ClipboardProvider};
-use rdev::display_size;
 use rdev::EventType::{MouseMove};
 use rdev::{listen, simulate, Event};
 use std::sync::mpsc::{Receiver, Sender};
-use std::env;
 
 struct MousePosition {
-    x: f64,
-    y: f64,
-}
-
-struct MouseHasBeenCenter {
-    top: bool,
-    left: bool,
-    right: bool,
-    bottom: bool,
-}
-
-struct WindowSize {
     x: f64,
     y: f64,
 }
@@ -40,125 +25,125 @@ const WHEEL_SUPPORTS_PIXEL_MOVE: bool = true;
 const WHEEL_SUPPORTS_PIXEL_MOVE: bool = false;
 
 lazy_static! {
-    static ref WINDOW_SIZE: Arc<std::sync::Mutex<WindowSize>> = Arc::new(std::sync::Mutex::new(WindowSize { x: 0.0, y: 0.0 }));
+    //static ref WINDOW_SIZE: Arc<std::sync::Mutex<WindowSize>> = Arc::new(std::sync::Mutex::new(WindowSize { x: 0.0, y: 0.0 }));
     static ref MOUSE_LATEST_POS: Arc<std::sync::Mutex<MousePosition>> = Arc::new(std::sync::Mutex::new(MousePosition { x: 0.0, y: 0.0 }));
     static ref MOUSE_OFFSET_FROM_REAL: Arc<std::sync::Mutex<MouseOffset>> = Arc::new(std::sync::Mutex::new(MouseOffset { x: 0, y: 0 }));
     static ref MOUSE_LATEST_NANO: Arc<std::sync::Mutex<Option<u128>>> = Arc::new(std::sync::Mutex::new(None));
     static ref MOUSE_ROLLING_AVG_UPDATE_INTERVAL: Arc<std::sync::Mutex<u128>> = Arc::new(std::sync::Mutex::new(1000000000/60)); // Assume 60 updates/second at the start
-    static ref MOUSE_HAS_BEEN_CENTER: Arc<std::sync::Mutex<MouseHasBeenCenter>> = Arc::new(std::sync::Mutex::new(MouseHasBeenCenter { top: false, left: false, right: false, bottom: false }));
+    //static ref MOUSE_HAS_BEEN_CENTER: Arc<std::sync::Mutex<MouseHasBeenCenter>> = Arc::new(std::sync::Mutex::new(MouseHasBeenCenter { top: false, left: false, right: false, bottom: false }));
     static ref WHEEL_SUB_PIXEL_X: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
     static ref WHEEL_SUB_PIXEL_Y: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
 
     // https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_code_values
     // https://source.chromium.org/chromium/chromium/src/+/main:ui/events/keycodes/dom/dom_code_data.inc;l=344;drc=3344b61f7c7f06cf96069751c3bd64d8ec3e3428
-    static ref CODE_TO_RDEV_KEY: HashMap<&'static str, Key2> = HashMap::from([
-        ("AltLeft", Key2::Alt),
-        ("AltRight", Key2::AltGr),
-        ("Backspace", Key2::Backspace),
-        ("CapsLock", Key2::CapsLock),
-        ("ControlLeft", Key2::ControlLeft),
-        ("ControlRight", Key2::ControlRight),
-        ("Delete", Key2::Delete),
-        ("ArrowDown", Key2::DownArrow),
-        ("End", Key2::End),
-        ("Escape", Key2::Escape),
-        ("F1", Key2::F1),
-        ("F10", Key2::F10),
-        ("F11", Key2::F11),
-        ("F12", Key2::F12),
-        ("F2", Key2::F2),
-        ("F3", Key2::F3),
-        ("F4", Key2::F4),
-        ("F5", Key2::F5),
-        ("F6", Key2::F6),
-        ("F7", Key2::F7),
-        ("F8", Key2::F8),
-        ("F9", Key2::F9),
-        ("Home", Key2::Home),
-        ("ArrowLeft", Key2::LeftArrow),
-        ("MetaLeft", Key2::MetaLeft),
-        ("OSLeft", Key2::MetaLeft),
-        ("MetaRight", Key2::MetaRight),
-        ("OSRight", Key2::MetaRight),
-        ("PageDown", Key2::PageDown),
-        ("PageUp", Key2::PageUp),
-        ("Enter", Key2::Return),
-        ("ArrowRight", Key2::RightArrow),
-        ("ShiftLeft", Key2::ShiftLeft),
-        ("ShiftRight", Key2::ShiftRight),
-        ("Space", Key2::Space),
-        ("Tab", Key2::Tab),
-        ("ArrowUp", Key2::UpArrow),
-        ("PrintScreen", Key2::PrintScreen),
-        ("ScrollLock", Key2::ScrollLock),
-        ("Pause", Key2::Pause),
-        ("NumLock", Key2::NumLock),
-        ("Backquote", Key2::BackQuote),
-        ("Digit1", Key2::Num1),
-        ("Digit2", Key2::Num2),
-        ("Digit3", Key2::Num3),
-        ("Digit4", Key2::Num4),
-        ("Digit5", Key2::Num5),
-        ("Digit6", Key2::Num6),
-        ("Digit7", Key2::Num7),
-        ("Digit8", Key2::Num8),
-        ("Digit9", Key2::Num9),
-        ("Digit0", Key2::Num0),
-        ("Minus", Key2::Minus),
-        ("Equal", Key2::Equal),
-        ("KeyQ", Key2::KeyQ),
-        ("KeyW", Key2::KeyW),
-        ("KeyE", Key2::KeyE),
-        ("KeyR", Key2::KeyR),
-        ("KeyT", Key2::KeyT),
-        ("KeyY", Key2::KeyY),
-        ("KeyU", Key2::KeyU),
-        ("KeyI", Key2::KeyI),
-        ("KeyO", Key2::KeyO),
-        ("KeyP", Key2::KeyP),
-        ("BracketLeft", Key2::LeftBracket),
-        ("BracketRight", Key2::RightBracket),
-        ("KeyA", Key2::KeyA),
-        ("KeyS", Key2::KeyS),
-        ("KeyD", Key2::KeyD),
-        ("KeyF", Key2::KeyF),
-        ("KeyG", Key2::KeyG),
-        ("KeyH", Key2::KeyH),
-        ("KeyJ", Key2::KeyJ),
-        ("KeyK", Key2::KeyK),
-        ("KeyL", Key2::KeyL),
-        ("Semicolon", Key2::SemiColon),
-        ("Quote", Key2::Quote),
-        ("Backslash", Key2::BackSlash),
-        ("IntlBackslash", Key2::IntlBackslash),
-        ("KeyZ", Key2::KeyZ),
-        ("KeyX", Key2::KeyX),
-        ("KeyC", Key2::KeyC),
-        ("KeyV", Key2::KeyV),
-        ("KeyB", Key2::KeyB),
-        ("KeyN", Key2::KeyN),
-        ("KeyM", Key2::KeyM),
-        ("Comma", Key2::Comma),
-        ("Period", Key2::Dot),
-        ("Slash", Key2::Slash),
-        ("Insert", Key2::Insert),
-        ("NumpadEnter", Key2::KpReturn),
-        ("NumpadSubtract", Key2::KpMinus),
-        ("NumpadAdd", Key2::KpPlus),
-        ("NumpadMultiply", Key2::KpMultiply),
-        ("NumpadDivide", Key2::KpDivide),
-        ("Numpad0", Key2::Kp0),
-        ("Numpad1", Key2::Kp1),
-        ("Numpad2", Key2::Kp2),
-        ("Numpad3", Key2::Kp3),
-        ("Numpad4", Key2::Kp4),
-        ("Numpad5", Key2::Kp5),
-        ("Numpad6", Key2::Kp6),
-        ("Numpad7", Key2::Kp7),
-        ("Numpad8", Key2::Kp8),
-        ("Numpad9", Key2::Kp9),
-        ("NumpadDecimal", Key2::KpDelete),
-        ("Fn", Key2::Function), // Frontend does not fire this event actually, unless maybe on Firefox Android?
+    static ref CODE_TO_RDEV_KEY: HashMap<&'static str, Key> = HashMap::from([
+        ("AltLeft", Key::Alt),
+        ("AltRight", Key::AltGr),
+        ("Backspace", Key::Backspace),
+        ("CapsLock", Key::CapsLock),
+        ("ControlLeft", Key::ControlLeft),
+        ("ControlRight", Key::ControlRight),
+        ("Delete", Key::Delete),
+        ("ArrowDown", Key::DownArrow),
+        ("End", Key::End),
+        ("Escape", Key::Escape),
+        ("F1", Key::F1),
+        ("F10", Key::F10),
+        ("F11", Key::F11),
+        ("F12", Key::F12),
+        ("F2", Key::F2),
+        ("F3", Key::F3),
+        ("F4", Key::F4),
+        ("F5", Key::F5),
+        ("F6", Key::F6),
+        ("F7", Key::F7),
+        ("F8", Key::F8),
+        ("F9", Key::F9),
+        ("Home", Key::Home),
+        ("ArrowLeft", Key::LeftArrow),
+        ("MetaLeft", Key::MetaLeft),
+        ("OSLeft", Key::MetaLeft),
+        ("MetaRight", Key::MetaRight),
+        ("OSRight", Key::MetaRight),
+        ("PageDown", Key::PageDown),
+        ("PageUp", Key::PageUp),
+        ("Enter", Key::Return),
+        ("ArrowRight", Key::RightArrow),
+        ("ShiftLeft", Key::ShiftLeft),
+        ("ShiftRight", Key::ShiftRight),
+        ("Space", Key::Space),
+        ("Tab", Key::Tab),
+        ("ArrowUp", Key::UpArrow),
+        ("PrintScreen", Key::PrintScreen),
+        ("ScrollLock", Key::ScrollLock),
+        ("Pause", Key::Pause),
+        ("NumLock", Key::NumLock),
+        ("Backquote", Key::BackQuote),
+        ("Digit1", Key::Num1),
+        ("Digit2", Key::Num2),
+        ("Digit3", Key::Num3),
+        ("Digit4", Key::Num4),
+        ("Digit5", Key::Num5),
+        ("Digit6", Key::Num6),
+        ("Digit7", Key::Num7),
+        ("Digit8", Key::Num8),
+        ("Digit9", Key::Num9),
+        ("Digit0", Key::Num0),
+        ("Minus", Key::Minus),
+        ("Equal", Key::Equal),
+        ("KeyQ", Key::KeyQ),
+        ("KeyW", Key::KeyW),
+        ("KeyE", Key::KeyE),
+        ("KeyR", Key::KeyR),
+        ("KeyT", Key::KeyT),
+        ("KeyY", Key::KeyY),
+        ("KeyU", Key::KeyU),
+        ("KeyI", Key::KeyI),
+        ("KeyO", Key::KeyO),
+        ("KeyP", Key::KeyP),
+        ("BracketLeft", Key::LeftBracket),
+        ("BracketRight", Key::RightBracket),
+        ("KeyA", Key::KeyA),
+        ("KeyS", Key::KeyS),
+        ("KeyD", Key::KeyD),
+        ("KeyF", Key::KeyF),
+        ("KeyG", Key::KeyG),
+        ("KeyH", Key::KeyH),
+        ("KeyJ", Key::KeyJ),
+        ("KeyK", Key::KeyK),
+        ("KeyL", Key::KeyL),
+        ("Semicolon", Key::SemiColon),
+        ("Quote", Key::Quote),
+        ("Backslash", Key::BackSlash),
+        ("IntlBackslash", Key::IntlBackslash),
+        ("KeyZ", Key::KeyZ),
+        ("KeyX", Key::KeyX),
+        ("KeyC", Key::KeyC),
+        ("KeyV", Key::KeyV),
+        ("KeyB", Key::KeyB),
+        ("KeyN", Key::KeyN),
+        ("KeyM", Key::KeyM),
+        ("Comma", Key::Comma),
+        ("Period", Key::Dot),
+        ("Slash", Key::Slash),
+        ("Insert", Key::Insert),
+        ("NumpadEnter", Key::KpReturn),
+        ("NumpadSubtract", Key::KpMinus),
+        ("NumpadAdd", Key::KpPlus),
+        ("NumpadMultiply", Key::KpMultiply),
+        ("NumpadDivide", Key::KpDivide),
+        ("Numpad0", Key::Kp0),
+        ("Numpad1", Key::Kp1),
+        ("Numpad2", Key::Kp2),
+        ("Numpad3", Key::Kp3),
+        ("Numpad4", Key::Kp4),
+        ("Numpad5", Key::Kp5),
+        ("Numpad6", Key::Kp6),
+        ("Numpad7", Key::Kp7),
+        ("Numpad8", Key::Kp8),
+        ("Numpad9", Key::Kp9),
+        ("NumpadDecimal", Key::KpDelete),
+        ("Fn", Key::Function), // Frontend does not fire this event actually, unless maybe on Firefox Android?
     ]);
 
     // values from here: https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/button#value
@@ -201,18 +186,11 @@ fn send(event_type: &EventType) {
         }
     }
     // Let ths OS catchup (at least MacOS)
+    // Only if keyboard event!
     //if cfg!(linux) {
         //println!("LINUX");
         //thread::sleep(delay);
     //}
-}
-
-fn update_window_size(x: f64, y: f64) {
-    {
-        let mut window_size = WINDOW_SIZE.lock().unwrap();
-        window_size.x = x;
-        window_size.y = y;
-    }
 }
 
 fn update_mouse_position(x: f64, y: f64) {
@@ -223,54 +201,14 @@ fn update_mouse_position(x: f64, y: f64) {
     }
 }
 
-fn mouse_move_relative(delta_x: f64, delta_y: f64) -> (bool, f64) {
-    let mut is_right = false;
-    let mut side_position = 0.0;
+fn mouse_move_relative(delta_x: f64, delta_y: f64) /* -> (bool, f64)  */{
     let (x, y);
     {
         let mouse_position = MOUSE_LATEST_POS.lock().unwrap();
-        let window_size = WINDOW_SIZE.lock().unwrap();
-
-        let new_x = mouse_position.x + delta_x;
-        if new_x < 0.0 {
-            x = 0.0;
-        } else if new_x > window_size.x {
-            x = window_size.x;
-        } else {
-            x = new_x;
-        }
-
-        let new_y = mouse_position.y + delta_y;
-        if new_y < 0.0 {
-            y = 0.0;
-        } else if new_y > window_size.y {
-            y = window_size.y;
-        } else {
-            y = new_y;
-        }
-    
-        if x > window_size.x - 2.0 {
-            println!("RELATIVE ScreenRight");
-            {
-                let mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
-                if mouse_has_been_center_ref.left {
-                    is_right = true;
-                    side_position = y / window_size.y;
-                } else {
-                    println!("Has not been center yet")
-                }
-            }
-
-        } else if x < window_size.x - MOUSE_CENTER_DISTANCE {
-            let mut mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
-            if !mouse_has_been_center_ref.left {
-                mouse_has_been_center_ref.left = true;
-                println!("Left Center")
-            }
-        }
+        x = mouse_position.x + delta_x;
+        y = mouse_position.y + delta_y;
     }
     send(&EventType::MouseMove { x, y });
-    return (is_right, side_position);
 }
 
 fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData/* , enigo_handler_tx: SyncSender<String> */) -> (Option<u128>, PostSleepData) {
@@ -299,9 +237,7 @@ fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData/
     }
 
     // Move mouse
-    let (is_right, side_position) = mouse_move_relative(offset_x.into(), offset_y.into());
-    post_sleep_data.is_right = is_right;
-    post_sleep_data.side_position = side_position;
+    mouse_move_relative(offset_x.into(), offset_y.into());
 
     // Update latest mouse nano and save the difference to the previous
     let now = get_epoch_nanos();
@@ -463,7 +399,7 @@ fn handle_keydown(mut values: Split<&str>) {
     // If not this, @ would not work
     if code == "AltRight" {
         println!("RELEASING ControlLeft");
-        send(&EventType::KeyRelease(Key2::ControlLeft));
+        send(&EventType::KeyRelease(Key::ControlLeft));
     }
 
     let key = CODE_TO_RDEV_KEY.get(code);
@@ -494,29 +430,12 @@ fn handle_paste(mut values: Split<&str>) {
     let data = values.next().unwrap();
     let mut ctx = ClipboardContext::new().unwrap();
     ctx.set_contents(data.to_owned()).unwrap();
-    send(&EventType::KeyPress(Key2::ControlLeft));
+    send(&EventType::KeyPress(Key::ControlLeft));
     thread::sleep(delay);
-    send(&EventType::KeyPress(Key2::KeyV));
+    send(&EventType::KeyPress(Key::KeyV));
     thread::sleep(delay);
 
     println!("Pasted {}!", data);
-}
-
-fn handle_leftjump(mut values: Split<&str>) {
-    {
-        let mut mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
-        mouse_has_been_center_ref.left = false;
-    }
-    let height = values.next().unwrap().parse::<f64>().unwrap();
-    let window_size = WINDOW_SIZE.lock().unwrap();
-    assert!(window_size.x >= MOUSE_JUMP_DISTANCE);   
-    //println!("{:?}", EventType::MouseMove { x: window_size.x - MOUSE_JUMP_DISTANCE, y: window_size.y * height }); 
-    send(&EventType::MouseMove { x: window_size.x - MOUSE_JUMP_DISTANCE, y: window_size.y * height });
-}
-
-fn handle_mousehide() {
-    let window_size = WINDOW_SIZE.lock().unwrap();
-    send(&EventType::MouseMove { x: window_size.x / 2.0 + 1.0, y: window_size.y });
 }
 
 pub async fn main_process(
@@ -526,16 +445,6 @@ pub async fn main_process(
     /* recv_stop_4: Receiver<bool>, */
     send_finished: Sender<bool>,
 ) {
-    let (display_width_u64, display_height_u64) = display_size().unwrap();
-    assert!(display_width_u64 > 0);
-    assert!(display_height_u64 > 0);
-    let display_width = display_width_u64 as f64;
-    let display_height = display_height_u64 as f64;
-    println!("Width: {} Height: {}", display_width, display_height);
-
-    update_window_size(display_width, display_height);
-    update_mouse_position(display_width / 2.0, display_height / 2.0);
-
     // rdev::listen cannot be stopped, catching a panic is the only workaround
     // https://github.com/Narsil/rdev/issues/72#issuecomment-1374830094
     let default_hook = panic::take_hook();
@@ -555,20 +464,7 @@ pub async fn main_process(
     let rdev_listen_handle = thread::spawn(move || {
         let callback = move |event: Event| {
             match event.event_type {
-                MouseMove { x, y } => {
-                    update_mouse_position(x,y);
-                    /* if x < 1.0 {
-                        println!("ScreenLeft");
-                    } else if x > display_width - 2.0 {
-                        println!("ScreenRight");
-                    } else if y < 1.0 {
-                        // Top will be missed if left or right as well
-                        println!("ScreenTop");
-                    } else if y > display_height - 2.0 {
-                        // Bottom will be missed if left or right as well
-                        println!("ScreenBottom");
-                    } */
-                }
+                MouseMove { x, y } => update_mouse_position(x,y),
                 _ => (),
             };
             if let Ok(should_stop) = recv_stop_1.try_recv() {
@@ -604,8 +500,6 @@ pub async fn main_process(
                 x: 0,
                 y: 0
             },
-            is_right: false,
-            side_position: 0.0,
         };
 
         if &name == "mousemove" {
@@ -627,10 +521,6 @@ pub async fn main_process(
             sleep_amount = Some(50 * 1000000);
         } else if &name == "paste" {
             handle_paste(values);
-        } else if &name == "leftjump" {
-            handle_leftjump(values);
-        } else if &name == "mousehide" {
-            handle_mousehide();
         } else {
             println!("Unknown event.name: {}", name);
         }
@@ -657,7 +547,6 @@ pub async fn main_process(
         on_message_post_sleep,
         recv_stop_2,
         recv_stop_3,
-        /* recv_stop_4, */
     ).await;
 
     println!("Waiting listen to join");
