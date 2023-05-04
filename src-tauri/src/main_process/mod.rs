@@ -26,7 +26,7 @@ const WHEEL_SUPPORTS_PIXEL_MOVE: bool = false;
 
 lazy_static! {
     //static ref WINDOW_SIZE: Arc<std::sync::Mutex<WindowSize>> = Arc::new(std::sync::Mutex::new(WindowSize { x: 0.0, y: 0.0 }));
-    static ref MOUSE_LATEST_POS: Arc<std::sync::Mutex<MousePosition>> = Arc::new(std::sync::Mutex::new(MousePosition { x: 0.0, y: 0.0 }));
+    //static ref MOUSE_LATEST_POS: Arc<std::sync::Mutex<MousePosition>> = Arc::new(std::sync::Mutex::new(MousePosition { x: 0.0, y: 0.0 }));
     static ref MOUSE_OFFSET_FROM_REAL: Arc<std::sync::Mutex<MouseOffset>> = Arc::new(std::sync::Mutex::new(MouseOffset { x: 0, y: 0 }));
     static ref MOUSE_LATEST_NANO: Arc<std::sync::Mutex<Option<u128>>> = Arc::new(std::sync::Mutex::new(None));
     static ref MOUSE_ROLLING_AVG_UPDATE_INTERVAL: Arc<std::sync::Mutex<u128>> = Arc::new(std::sync::Mutex::new(1000000000/60)); // Assume 60 updates/second at the start
@@ -193,22 +193,25 @@ fn send(event_type: &EventType) {
     //}
 }
 
-fn update_mouse_position(x: f64, y: f64) {
+/* fn update_mouse_position(x: f64, y: f64) {
     {
         let mut mouse_position = MOUSE_LATEST_POS.lock().unwrap();
         mouse_position.x = x;
         mouse_position.y = y;
     }
-}
+} */
 
 fn mouse_move_relative(delta_x: f64, delta_y: f64) /* -> (bool, f64)  */{
-    let (x, y);
+    //println!("moving {} {}",delta_x,delta_y);
+    send(&EventType::MouseMoveRelative { x: delta_x, y: delta_y });
+
+    /* let (x, y);
     {
         let mouse_position = MOUSE_LATEST_POS.lock().unwrap();
         x = mouse_position.x + delta_x;
         y = mouse_position.y + delta_y;
     }
-    send(&EventType::MouseMove { x, y });
+    send(&EventType::MouseMove { x, y }); */
 }
 
 fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData/* , enigo_handler_tx: SyncSender<String> */) -> (Option<u128>, PostSleepData) {
@@ -439,7 +442,7 @@ fn handle_paste(mut values: Split<&str>) {
 }
 
 pub async fn main_process(
-    recv_stop_1: Receiver<bool>,
+    //recv_stop_1: Receiver<bool>,
     recv_stop_2: Receiver<bool>,
     recv_stop_3: tokio::sync::mpsc::Receiver<()>,
     /* recv_stop_4: Receiver<bool>, */
@@ -461,7 +464,7 @@ pub async fn main_process(
         default_hook(panic_info);
     }));
 
-    let rdev_listen_handle = thread::spawn(move || {
+    /* let rdev_listen_handle = thread::spawn(move || {
         let callback = move |event: Event| {
             match event.event_type {
                 MouseMove { x, y } => update_mouse_position(x,y),
@@ -487,7 +490,7 @@ pub async fn main_process(
             Ok(res) => res,
             Err(_) => println!("caught panic as expected!"),
         }
-    });
+    }); */
 
     let on_message_immmediate = move |msg: String| {
         let mut values = msg.split(",");
@@ -549,10 +552,10 @@ pub async fn main_process(
         recv_stop_3,
     ).await;
 
-    println!("Waiting listen to join");
+    /* println!("Waiting listen to join");
     if let Err(_e) = rdev_listen_handle.join() {
         println!("Join thread err");
-    }
+    } */
 
     if let Err(_e) = send_finished.send(true) {
         println!("Could not send finished");

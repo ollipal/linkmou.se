@@ -48,7 +48,7 @@ fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
 }
 
 fn main() {
-    let (send_stop_1, recv_stop_1) = channel();
+    //let (send_stop_1, recv_stop_1) = channel();
     let (send_stop_2, recv_stop_2) = channel();
     let (send_stop_3, recv_stop_3) = tokio::sync::mpsc::channel::<()>(1);
     //let (send_stop_4, recv_stop_4) = channel();
@@ -63,7 +63,6 @@ fn main() {
             .unwrap()
             .block_on(async {
                 main_process(
-                    recv_stop_1,
                     recv_stop_2,
                     recv_stop_3,
                     /* recv_stop_4, */
@@ -90,9 +89,9 @@ fn main() {
         .run(move |_app_handle, event| match event {
             tauri::RunEvent::ExitRequested { /* api, */ .. } => {
                 /* api.prevent_exit(); */
-                if let Err(e) = send_stop_1.send(true) {
+                /* if let Err(e) = send_stop_1.send(true) {
                     println!("Could not send stop 1 {}", e);
-                }
+                } */
                 if let Err(e) = send_stop_2.send(true) {
                     println!("Could not send stop 2 {}", e);
                 }
