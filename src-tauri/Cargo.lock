@@ -2989,7 +2989,7 @@ dependencies = [
 [[package]]
 name = "rdev"
 version = "0.5.2"
-source = "git+https://github.com/Narsil/rdev.git?rev=4aa8ef8#4aa8ef8f5c51e5416f98126546f21eb014f47dbf"
+source = "git+https://github.com/ollipal/rdev.git?rev=0c8dec5#0c8dec5ad94bbd8b31b3ee5d1ee53550cc5ec63d"
 dependencies = [
  "cocoa 0.22.0",
  "core-foundation 0.7.0",
@@ -2997,6 +2997,7 @@ dependencies = [
  "core-graphics 0.19.2",
  "lazy_static",
  "libc",
+ "objc",
  "winapi",
  "x11",
 ]
