@@ -5,7 +5,7 @@ use lazy_static::__Deref;
 use crate::main_process::datachannel::{process_datachannel_messages, MouseOffset, PostSleepData};
 use copypasta::{ClipboardContext, ClipboardProvider};
 use rdev::EventType::{MouseMove};
-use rdev::{listen, simulate, Event};
+use rdev::{simulate, mouse_move_relative};
 use std::sync::mpsc::{Receiver, Sender};
 
 struct MousePosition {
@@ -201,18 +201,18 @@ fn send(event_type: &EventType) {
     }
 } */
 
-fn mouse_move_relative(delta_x: f64, delta_y: f64) /* -> (bool, f64)  */{
+/* fn mouse_move_relative(delta_x: f64, delta_y: f64) /* -> (bool, f64)  */{
     //println!("moving {} {}",delta_x,delta_y);
     send(&EventType::MouseMoveRelative { x: delta_x, y: delta_y });
 
-    /* let (x, y);
+    let (x, y);
     {
         let mouse_position = MOUSE_LATEST_POS.lock().unwrap();
         x = mouse_position.x + delta_x;
         y = mouse_position.y + delta_y;
     }
-    send(&EventType::MouseMove { x, y }); */
-}
+    send(&EventType::MouseMove { x, y });
+} */
 
 fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData/* , enigo_handler_tx: SyncSender<String> */) -> (Option<u128>, PostSleepData) {
     // Move immediately to new position. Take mouse offset into account
@@ -240,7 +240,7 @@ fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData/
     }
 
     // Move mouse
-    mouse_move_relative(offset_x.into(), offset_y.into());
+    mouse_move_relative(offset_x, offset_y, false);
 
     // Update latest mouse nano and save the difference to the previous
     let now = get_epoch_nanos();
@@ -541,7 +541,7 @@ pub async fn main_process(
                 return;
             }
 
-            mouse_move_relative(post_sleep_data.mouse_offset.x.into(), post_sleep_data.mouse_offset.y.into());
+            mouse_move_relative(post_sleep_data.mouse_offset.x, post_sleep_data.mouse_offset.y, false);
         }
     };
 
