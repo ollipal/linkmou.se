@@ -13,6 +13,18 @@ struct MousePosition {
     y: f64,
 }
 
+struct MouseHasBeenCenter {
+    top: bool,
+    left: bool,
+    right: bool,
+    bottom: bool,
+}
+
+struct WindowSize {
+    x: Option<i32>,
+    y: Option<i32>,
+}
+
 const MOUSE_ROLLING_AVG_MULT : f64 = 0.025;
 const MOUSE_TOO_SLOW : f64 = 1.05;
 const MOUSE_TOO_FAST : f64 = 0.95;
@@ -25,12 +37,12 @@ const WHEEL_SUPPORTS_PIXEL_MOVE: bool = true;
 const WHEEL_SUPPORTS_PIXEL_MOVE: bool = false;
 
 lazy_static! {
-    //static ref WINDOW_SIZE: Arc<std::sync::Mutex<WindowSize>> = Arc::new(std::sync::Mutex::new(WindowSize { x: 0.0, y: 0.0 }));
+    static ref WINDOW_SIZE: Arc<std::sync::Mutex<WindowSize>> = Arc::new(std::sync::Mutex::new(WindowSize { x: None, y: None }));
     //static ref MOUSE_LATEST_POS: Arc<std::sync::Mutex<MousePosition>> = Arc::new(std::sync::Mutex::new(MousePosition { x: 0.0, y: 0.0 }));
     static ref MOUSE_OFFSET_FROM_REAL: Arc<std::sync::Mutex<MouseOffset>> = Arc::new(std::sync::Mutex::new(MouseOffset { x: 0, y: 0 }));
     static ref MOUSE_LATEST_NANO: Arc<std::sync::Mutex<Option<u128>>> = Arc::new(std::sync::Mutex::new(None));
     static ref MOUSE_ROLLING_AVG_UPDATE_INTERVAL: Arc<std::sync::Mutex<u128>> = Arc::new(std::sync::Mutex::new(1000000000/60)); // Assume 60 updates/second at the start
-    //static ref MOUSE_HAS_BEEN_CENTER: Arc<std::sync::Mutex<MouseHasBeenCenter>> = Arc::new(std::sync::Mutex::new(MouseHasBeenCenter { top: false, left: false, right: false, bottom: false }));
+    static ref MOUSE_HAS_BEEN_CENTER: Arc<std::sync::Mutex<MouseHasBeenCenter>> = Arc::new(std::sync::Mutex::new(MouseHasBeenCenter { top: false, left: false, right: false, bottom: false }));
     static ref WHEEL_SUB_PIXEL_X: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
     static ref WHEEL_SUB_PIXEL_Y: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
 
@@ -441,6 +453,58 @@ fn handle_paste(mut values: Split<&str>) {
     println!("Pasted {}!", data);
 }
 
+fn handle_leftjump(mut values: Split<&str>) {
+    let (mut prev_start_x, mut prev_start_y) = (-2, -2);
+    let (mut start_x, mut start_y) = (-1, -1);
+
+
+    for delta in [10000, 1000, 100, 10, 1].iter() {
+        println!("delta: {}", delta);
+        loop {
+            start_x = mouse_move_relative(*delta, 0, true).0;
+            if prev_start_x == start_x {
+                break;
+            }
+            println!("start_x: {}", start_x);
+            prev_start_x = start_x
+        }
+    }
+    let max_x = start_x;
+
+    for delta in [10000, 1000, 100, 10, 1].iter() {
+        println!("delta: {}", delta);
+        loop {
+            start_y = mouse_move_relative(0, *delta, true).1;
+            if prev_start_y == start_y {
+                break;
+            }
+            println!("start_x: {}", start_y);
+            prev_start_y = start_y
+        }
+    }
+    let max_y = start_y;
+
+    println!("max_x!: {}", max_x);
+    println!("max_y!: {}", max_y);
+
+    
+
+    /* {
+        let mut mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
+        mouse_has_been_center_ref.left = false;
+    }
+    let height = values.next().unwrap().parse::<f64>().unwrap();
+    let window_size = WINDOW_SIZE.lock().unwrap();
+    assert!(window_size.max_x >= MOUSE_JUMP_DISTANCE);   
+    //println!("{:?}", EventType::MouseMove { x: window_size.x - MOUSE_JUMP_DISTANCE, y: window_size.y * height }); 
+    send(&EventType::MouseMove { x: window_size.max_x - MOUSE_JUMP_DISTANCE, y: window_size.y * height }); */
+}
+
+fn handle_mousehide() {
+    /* let window_size = WINDOW_SIZE.lock().unwrap();
+    send(&EventType::MouseMove { x: window_size.x / 2.0 + 1.0, y: window_size.y }); */
+}
+
 pub async fn main_process(
     //recv_stop_1: Receiver<bool>,
     recv_stop_2: Receiver<bool>,
@@ -524,6 +588,10 @@ pub async fn main_process(
             sleep_amount = Some(50 * 1000000);
         } else if &name == "paste" {
             handle_paste(values);
+        } else if &name == "leftjump" {
+            handle_leftjump(values);
+        } else if &name == "mousehide" {
+            handle_mousehide();
         } else {
             println!("Unknown event.name: {}", name);
         }
