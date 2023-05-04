@@ -9,6 +9,7 @@ use rdev::display_size;
 use rdev::EventType::{MouseMove};
 use rdev::{listen, simulate, Event};
 use std::sync::mpsc::{Receiver, Sender};
+use std::env;
 
 struct MousePosition {
     x: f64,
@@ -33,6 +34,10 @@ const MOUSE_TOO_FAST : f64 = 0.95;
 const MOUSE_JUMP_DISTANCE: f64 = 5.0; // Distance from side when jumped
 const MOUSE_CENTER_DISTANCE: f64 = 35.0; // Distance from side considered to have been "center"
 const WHEEL_LINE_IN_PIXELS: f64 = 17.0; // DOM_DELTA_LINE in chromiun 2023, https://stackoverflow.com/a/37474225  
+#[cfg(target_os = "windows")]
+const WHEEL_SUPPORTS_PIXEL_MOVE: bool = true;
+#[cfg(not(target_os = "windows"))]
+const WHEEL_SUPPORTS_PIXEL_MOVE: bool = false;
 
 lazy_static! {
     static ref WINDOW_SIZE: Arc<std::sync::Mutex<WindowSize>> = Arc::new(std::sync::Mutex::new(WindowSize { x: 0.0, y: 0.0 }));
