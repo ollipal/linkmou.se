@@ -88,9 +88,9 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(move |_app_handle, event| match event {
-            tauri::RunEvent::ExitRequested { api, .. } => {
-                api.prevent_exit();
-                /* if let Err(e) = send_stop_1.send(true) {
+            tauri::RunEvent::ExitRequested { /* api, */ .. } => {
+                /* api.prevent_exit(); */
+                if let Err(e) = send_stop_1.send(true) {
                     println!("Could not send stop 1 {}", e);
                 }
                 if let Err(e) = send_stop_2.send(true) {
@@ -100,7 +100,7 @@ fn main() {
                     println!("Could not send stop 3 {}", e);
                 }
                 println!("Waiting for main_process to finish");
-                let _res = recv_finished.recv(); */ // result value does not matter here
+                let _res = recv_finished.recv(); // result value does not matter here
             }
             _ => {}
         });
