@@ -205,6 +205,14 @@ fn send(event_type: &EventType) {
     //}
 }
 
+fn update_window_size(x: i32, y: i32) {
+    {
+        let mut window_size = WINDOW_SIZE.lock().unwrap();
+        window_size.x = Some(x);
+        window_size.y = Some(y);
+    }
+}
+
 /* fn update_mouse_position(x: f64, y: f64) {
     {
         let mut mouse_position = MOUSE_LATEST_POS.lock().unwrap();
@@ -455,7 +463,7 @@ fn handle_paste(mut values: Split<&str>) {
 
 fn handle_leftjump(mut values: Split<&str>) {
     //let (mut prev_start_x, mut prev_start_y) = (-200, -200);
-    let (mut start_x, mut start_y) = (-100, -100);
+    //let (mut start_x, mut start_y) = (-100, -100);
 
 
     /* for delta in [/* 10000, 1000, 100,  */10/* , 1 */].iter() {
@@ -474,26 +482,35 @@ fn handle_leftjump(mut values: Split<&str>) {
         }
     } */
 
-    // Some stupidly large values
-    let TRIPLE_8K_X = 7680 * 3;
-    let TRIPLE_8K_Y = 4320 * 3;
+    if WINDOW_SIZE.lock().unwrap().x.is_none() {
+        // Some stupidly large values
+        let TRIPLE_8K_X = 7680 * 3;
+        let TRIPLE_8K_Y = 4320 * 3;
 
-    mouse_move_relative(TRIPLE_8K_X, 0, true);
-    let delay = time::Duration::from_millis(200);
-    thread::sleep(delay);
-    let max_x = mouse_move_relative(1, 0, true).0;
+        mouse_move_relative(TRIPLE_8K_X, 0, true);
+        let delay = time::Duration::from_millis(200);
+        thread::sleep(delay);
+        let max_x = mouse_move_relative(1, 0, true).0;
 
-    // macOS did get stuck on side
-    // Maybe related to the rounded corners?
-    // This attempts to fix that
-    mouse_move_relative(-50, 0, true).0;
-    let delay = time::Duration::from_millis(200);
-    thread::sleep(delay);
+        // macOS did get stuck on side
+        // Maybe related to the rounded corners?
+        // This attempts to fix that
+        mouse_move_relative(-50, 0, true).0;
+        let delay = time::Duration::from_millis(200);
+        thread::sleep(delay);
 
-    mouse_move_relative(0, TRIPLE_8K_Y, true);
-    let delay = time::Duration::from_millis(200);
-    thread::sleep(delay);
-    let max_y = mouse_move_relative(0, 1, true).1;
+        mouse_move_relative(0, TRIPLE_8K_Y, true);
+        let delay = time::Duration::from_millis(200);
+        thread::sleep(delay);
+        let max_y = mouse_move_relative(0, 1, true).1;
+
+        println!("max_x!: {}", max_x);
+        println!("max_y!: {}", max_y);
+
+        update_window_size(max_x, max_y);
+    }
+
+
 
 
     /* for delta in [/* 10000, 1000, 100,  */10/* , 1 */].iter() {
@@ -513,25 +530,25 @@ fn handle_leftjump(mut values: Split<&str>) {
     } */
     //let max_y = start_y;
 
-    println!("max_x!: {}", max_x);
-    println!("max_y!: {}", max_y);
-
+    
     
 
-    /* {
+    {
         let mut mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
         mouse_has_been_center_ref.left = false;
     }
     let height = values.next().unwrap().parse::<f64>().unwrap();
-    let window_size = WINDOW_SIZE.lock().unwrap();
-    assert!(window_size.max_x >= MOUSE_JUMP_DISTANCE);   
     //println!("{:?}", EventType::MouseMove { x: window_size.x - MOUSE_JUMP_DISTANCE, y: window_size.y * height }); 
-    send(&EventType::MouseMove { x: window_size.max_x - MOUSE_JUMP_DISTANCE, y: window_size.y * height }); */
+    
+    {
+        let window_size = WINDOW_SIZE.lock().unwrap();
+        send(&EventType::MouseMove { x: (window_size.x.unwrap_or(0) as f64) - MOUSE_JUMP_DISTANCE, y: (window_size.y.unwrap_or(0) as f64) * height });
+    }
 }
 
 fn handle_mousehide() {
-    /* let window_size = WINDOW_SIZE.lock().unwrap();
-    send(&EventType::MouseMove { x: window_size.x / 2.0 + 1.0, y: window_size.y }); */
+    let window_size = WINDOW_SIZE.lock().unwrap();
+    send(&EventType::MouseMove { x: (window_size.x.unwrap_or(0) as f64), y: (window_size.y.unwrap_or(0) as f64) * 0.97 });
 }
 
 pub async fn main_process(
