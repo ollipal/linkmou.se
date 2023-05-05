@@ -454,16 +454,16 @@ fn handle_paste(mut values: Split<&str>) {
 }
 
 fn handle_leftjump(mut values: Split<&str>) {
-    let (mut prev_start_x, mut prev_start_y) = (-200, -200);
+    //let (mut prev_start_x, mut prev_start_y) = (-200, -200);
     let (mut start_x, mut start_y) = (-100, -100);
 
 
-    for delta in [/* 10000, 1000, 100,  */10/* , 1 */].iter() {
+    /* for delta in [/* 10000, 1000, 100,  */10/* , 1 */].iter() {
         println!("delta: {}", delta);
         loop {
-            start_x = mouse_move_relative(*delta, 0, true).0;
+            (start_x, start_y) = mouse_move_relative(*delta, 0, true);
             mouse_move_relative(-2, 0, true).1;
-            if prev_start_x - 5 <= start_x && start_x <= prev_start_x + 5 {
+            if !(start_x == 0 && start_y == 0) && prev_start_x - 5 <= start_x && start_x <= prev_start_x + 5 {
                 break;
             }
             println!("start_x: {}", start_x);
@@ -472,8 +472,16 @@ fn handle_leftjump(mut values: Split<&str>) {
             let delay = time::Duration::from_millis(200);
             thread::sleep(delay);
         }
-    }
-    let max_x = start_x;
+    } */
+
+    // Some stupidly large values
+    let TRIPLE_8K_X = 7680 * 3;
+    let TRIPLE_8K_Y = 4320 * 3;
+
+    mouse_move_relative(TRIPLE_8K_X, 0, true);
+    let delay = time::Duration::from_millis(200);
+    thread::sleep(delay);
+    let max_x = mouse_move_relative(1, 0, true).0;
 
     // macOS did get stuck on side
     // Maybe related to the rounded corners?
@@ -482,12 +490,18 @@ fn handle_leftjump(mut values: Split<&str>) {
     let delay = time::Duration::from_millis(200);
     thread::sleep(delay);
 
-    for delta in [/* 10000, 1000, 100,  */10/* , 1 */].iter() {
+    mouse_move_relative(0, TRIPLE_8K_Y, true);
+    let delay = time::Duration::from_millis(200);
+    thread::sleep(delay);
+    let max_y = mouse_move_relative(0, 1, true).1;
+
+
+    /* for delta in [/* 10000, 1000, 100,  */10/* , 1 */].iter() {
         println!("delta: {}", delta);
         loop {
-            start_y = mouse_move_relative(0, *delta, true).1;
+            (start_x, start_y) = mouse_move_relative(0, *delta, true);
             mouse_move_relative(0, -2, true).1;
-            if prev_start_y - 5 <= start_y && start_y <= prev_start_y + 5 {
+            if !(start_x == 0 && start_y == 0) && prev_start_y - 5 <= start_y && start_y <= prev_start_y + 5 {
                 break;
             }
             println!("start_x: {}", start_y);
@@ -496,8 +510,8 @@ fn handle_leftjump(mut values: Split<&str>) {
             let delay = time::Duration::from_millis(200);
             thread::sleep(delay);
         }
-    }
-    let max_y = start_y;
+    } */
+    //let max_y = start_y;
 
     println!("max_x!: {}", max_x);
     println!("max_y!: {}", max_y);
