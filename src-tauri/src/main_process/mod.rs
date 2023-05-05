@@ -458,11 +458,11 @@ fn handle_leftjump(mut values: Split<&str>) {
     let (mut start_x, mut start_y) = (-1, -1);
 
 
-    for delta in [/* 10000, 1000, 100,  */10, 1].iter() {
+    for delta in [/* 10000, 1000, 100,  */10/* , 1 */].iter() {
         println!("delta: {}", delta);
         loop {
             start_x = mouse_move_relative(*delta, 0, true).0;
-            if prev_start_x == start_x {
+            if prev_start_x - 1 <= start_x && start_x <= prev_start_x + 1 {
                 break;
             }
             println!("start_x: {}", start_x);
@@ -478,12 +478,14 @@ fn handle_leftjump(mut values: Split<&str>) {
     // Maybe related to the rounded corners?
     // This attempts to fix that
     mouse_move_relative(-50, 0, true).0;
+    let delay = time::Duration::from_millis(200);
+    thread::sleep(delay);
 
-    for delta in [/* 10000, 1000, 100,  */10, 1].iter() {
+    for delta in [/* 10000, 1000, 100,  */10/* , 1 */].iter() {
         println!("delta: {}", delta);
         loop {
             start_y = mouse_move_relative(0, *delta, true).1;
-            if prev_start_y == start_y {
+            if prev_start_y - 1 <= start_y && start_y <= prev_start_y + 1 {
                 break;
             }
             println!("start_x: {}", start_y);
