@@ -454,15 +454,16 @@ fn handle_paste(mut values: Split<&str>) {
 }
 
 fn handle_leftjump(mut values: Split<&str>) {
-    let (mut prev_start_x, mut prev_start_y) = (-2, -2);
-    let (mut start_x, mut start_y) = (-1, -1);
+    let (mut prev_start_x, mut prev_start_y) = (-200, -200);
+    let (mut start_x, mut start_y) = (-100, -100);
 
 
     for delta in [/* 10000, 1000, 100,  */10/* , 1 */].iter() {
         println!("delta: {}", delta);
         loop {
             start_x = mouse_move_relative(*delta, 0, true).0;
-            if prev_start_x - 1 <= start_x && start_x <= prev_start_x + 1 {
+            mouse_move_relative(-2, 0, true).1;
+            if prev_start_x - 5 <= start_x && start_x <= prev_start_x + 5 {
                 break;
             }
             println!("start_x: {}", start_x);
@@ -485,7 +486,8 @@ fn handle_leftjump(mut values: Split<&str>) {
         println!("delta: {}", delta);
         loop {
             start_y = mouse_move_relative(0, *delta, true).1;
-            if prev_start_y - 1 <= start_y && start_y <= prev_start_y + 1 {
+            mouse_move_relative(0, -2, true).1;
+            if prev_start_y - 5 <= start_y && start_y <= prev_start_y + 5 {
                 break;
             }
             println!("start_x: {}", start_y);
