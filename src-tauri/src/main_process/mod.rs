@@ -454,7 +454,7 @@ fn handle_paste(mut values: Split<&str>) {
 }
 
 fn handle_leftjump(mut values: Split<&str>) {
-    /* let (mut prev_start_x, mut prev_start_y) = (-2, -2);
+    let (mut prev_start_x, mut prev_start_y) = (-2, -2);
     let (mut start_x, mut start_y) = (-1, -1);
 
 
@@ -485,7 +485,7 @@ fn handle_leftjump(mut values: Split<&str>) {
     let max_y = start_y;
 
     println!("max_x!: {}", max_x);
-    println!("max_y!: {}", max_y); */
+    println!("max_y!: {}", max_y);
 
     
 
