@@ -29,7 +29,7 @@ const MOUSE_ROLLING_AVG_MULT : f64 = 0.025;
 const MOUSE_TOO_SLOW : f64 = 1.05;
 const MOUSE_TOO_FAST : f64 = 0.95;
 const MOUSE_JUMP_DISTANCE: f64 = 5.0; // Distance from side when jumped
-const MOUSE_CENTER_DISTANCE: f64 = 35.0; // Distance from side considered to have been "center"
+const MOUSE_CENTER_DISTANCE: i32 = 35; // Distance from side considered to have been "center"
 const WHEEL_LINE_IN_PIXELS: f64 = 17.0; // DOM_DELTA_LINE in chromiun 2023, https://stackoverflow.com/a/37474225  
 #[cfg(target_os = "windows")]
 const WHEEL_SUPPORTS_PIXEL_MOVE: bool = true;
@@ -260,7 +260,32 @@ fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData/
     }
 
     // Move mouse
-    mouse_move_relative(offset_x, offset_y, false);
+    let (start_x, start_y) = mouse_move_relative(offset_x, offset_y, true);
+
+    // Update if needs jumping
+    {
+        let window_size = WINDOW_SIZE.lock().unwrap();
+        if start_x > window_size.x.unwrap_or(0) - 2 {
+            println!("RELATIVE ScreenRight");
+            {
+                let mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
+                if mouse_has_been_center_ref.left {
+                    post_sleep_data.is_right = true;
+                    post_sleep_data.side_position = start_y as f64 / window_size.y.unwrap_or(start_y/2) as f64;
+                } else {
+                    println!("Has not been center yet")
+                }
+            }
+
+        } else if x < window_size.x.unwrap_or(0) - MOUSE_CENTER_DISTANCE {
+            let mut mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
+            if !mouse_has_been_center_ref.left {
+                mouse_has_been_center_ref.left = true;
+                println!("Left Center")
+            }
+        }
+    }
+
 
     // Update latest mouse nano and save the difference to the previous
     let now = get_epoch_nanos();
@@ -462,6 +487,12 @@ fn handle_paste(mut values: Split<&str>) {
 }
 
 fn handle_leftjump(mut values: Split<&str>) {
+    {
+        let mut mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
+        mouse_has_been_center_ref.left = false;
+    }
+
+
     //let (mut prev_start_x, mut prev_start_y) = (-200, -200);
     //let (mut start_x, mut start_y) = (-100, -100);
 
@@ -484,23 +515,16 @@ fn handle_leftjump(mut values: Split<&str>) {
 
     if WINDOW_SIZE.lock().unwrap().x.is_none() {
         // Some stupidly large values
-        let TRIPLE_8K_X = 7680 * 3;
-        let TRIPLE_8K_Y = 4320 * 3;
+        let triple_8k_x = 7680 * 3;
+        let triple_8k_y = 4320 * 3;
 
-        mouse_move_relative(TRIPLE_8K_X, 0, true);
-        let delay = time::Duration::from_millis(200);
+        mouse_move_relative(triple_8k_x, 0, true);
+        let delay = time::Duration::from_millis(20); // Give time to move
         thread::sleep(delay);
         let max_x = mouse_move_relative(1, 0, true).0;
 
-        // macOS did get stuck on side
-        // Maybe related to the rounded corners?
-        // This attempts to fix that
-        mouse_move_relative(-50, 0, true).0;
-        let delay = time::Duration::from_millis(200);
-        thread::sleep(delay);
-
-        mouse_move_relative(0, TRIPLE_8K_Y, true);
-        let delay = time::Duration::from_millis(200);
+        mouse_move_relative(0, triple_8k_y, true);
+        let delay = time::Duration::from_millis(20); // Give time to move
         thread::sleep(delay);
         let max_y = mouse_move_relative(0, 1, true).1;
 
@@ -530,13 +554,6 @@ fn handle_leftjump(mut values: Split<&str>) {
     } */
     //let max_y = start_y;
 
-    
-    
-
-    {
-        let mut mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
-        mouse_has_been_center_ref.left = false;
-    }
     let height = values.next().unwrap().parse::<f64>().unwrap();
     //println!("{:?}", EventType::MouseMove { x: window_size.x - MOUSE_JUMP_DISTANCE, y: window_size.y * height }); 
     
@@ -549,6 +566,10 @@ fn handle_leftjump(mut values: Split<&str>) {
 fn handle_mousehide() {
     let window_size = WINDOW_SIZE.lock().unwrap();
     send(&EventType::MouseMove { x: (window_size.x.unwrap_or(0) as f64), y: (window_size.y.unwrap_or(0) as f64) * 0.97 });
+    {
+        let mut mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
+        mouse_has_been_center_ref.left = false;
+    }
 }
 
 pub async fn main_process(
@@ -613,6 +634,8 @@ pub async fn main_process(
                 x: 0,
                 y: 0
             },
+            is_right: false,
+            side_position: 0.0,
         };
 
         if &name == "mousemove" {
