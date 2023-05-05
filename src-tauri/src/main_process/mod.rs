@@ -471,6 +471,11 @@ fn handle_leftjump(mut values: Split<&str>) {
     }
     let max_x = start_x;
 
+    // macOS did get stuck on side
+    // Maybe related to the rounded corners?
+    // This attempts to fix that
+    mouse_move_relative(-50, 0, true).0;
+
     for delta in [10000, 1000, 100, 10, 1].iter() {
         println!("delta: {}", delta);
         loop {
