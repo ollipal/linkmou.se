@@ -45,6 +45,7 @@ lazy_static! {
     static ref MOUSE_HAS_BEEN_CENTER: Arc<std::sync::Mutex<MouseHasBeenCenter>> = Arc::new(std::sync::Mutex::new(MouseHasBeenCenter { top: false, left: false, right: false, bottom: false }));
     static ref WHEEL_SUB_PIXEL_X: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
     static ref WHEEL_SUB_PIXEL_Y: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
+    static ref CHECK_SIDES: Arc<std::sync::Mutex<bool>> = Arc::new(std::sync::Mutex::new(false));
 
     // https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_code_values
     // https://source.chromium.org/chromium/chromium/src/+/main:ui/events/keycodes/dom/dom_code_data.inc;l=344;drc=3344b61f7c7f06cf96069751c3bd64d8ec3e3428
@@ -259,29 +260,33 @@ fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData/
         post_sleep_data.mouse_offset.y = y / 2;
     }
 
+    let check_sides = CHECK_SIDES.lock().unwrap().clone();
+
     // Move mouse
-    let (start_x, start_y) = mouse_move_relative(offset_x, offset_y, true);
+    let (start_x, start_y) = mouse_move_relative(offset_x, offset_y, check_sides);
 
     // Update if needs jumping
-    {
-        let window_size = WINDOW_SIZE.lock().unwrap();
-        if start_x > window_size.x.unwrap_or(0) - 2 {
-            println!("RELATIVE ScreenRight");
-            {
-                let mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
-                if mouse_has_been_center_ref.left {
-                    post_sleep_data.is_right = true;
-                    post_sleep_data.side_position = start_y as f64 / window_size.y.unwrap_or(start_y/2) as f64;
-                } else {
-                    println!("Has not been center yet")
+    if check_sides {
+        {
+            let window_size = WINDOW_SIZE.lock().unwrap();
+            if start_x > window_size.x.unwrap_or(0) - 2 {
+                println!("RELATIVE ScreenRight");
+                {
+                    let mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
+                    if mouse_has_been_center_ref.left {
+                        post_sleep_data.is_right = true;
+                        post_sleep_data.side_position = start_y as f64 / window_size.y.unwrap_or(start_y/2) as f64;
+                    } else {
+                        println!("Has not been center yet")
+                    }
                 }
-            }
 
-        } else if x < window_size.x.unwrap_or(0) - MOUSE_CENTER_DISTANCE {
-            let mut mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
-            if !mouse_has_been_center_ref.left {
-                mouse_has_been_center_ref.left = true;
-                println!("Left Center")
+            } else if x < window_size.x.unwrap_or(0) - MOUSE_CENTER_DISTANCE {
+                let mut mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
+                if !mouse_has_been_center_ref.left {
+                    mouse_has_been_center_ref.left = true;
+                    println!("Left Center")
+                }
             }
         }
     }
@@ -492,6 +497,10 @@ fn handle_leftjump(mut values: Split<&str>) {
         mouse_has_been_center_ref.left = false;
     }
 
+    {
+        let mut check_sides = CHECK_SIDES.lock().unwrap();
+        *check_sides = true;
+    }
 
     //let (mut prev_start_x, mut prev_start_y) = (-200, -200);
     //let (mut start_x, mut start_y) = (-100, -100);
@@ -569,6 +578,10 @@ fn handle_mousehide() {
     {
         let mut mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
         mouse_has_been_center_ref.left = false;
+    }
+    {
+        let mut check_sides = CHECK_SIDES.lock().unwrap();
+        *check_sides = false;
     }
 }
 
