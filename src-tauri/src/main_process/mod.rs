@@ -458,7 +458,7 @@ fn handle_leftjump(mut values: Split<&str>) {
     let (mut start_x, mut start_y) = (-1, -1);
 
 
-    for delta in [10000, 1000, 100, 10, 1].iter() {
+    for delta in [/* 10000, 1000, 100,  */10, 1].iter() {
         println!("delta: {}", delta);
         loop {
             start_x = mouse_move_relative(*delta, 0, true).0;
@@ -466,7 +466,10 @@ fn handle_leftjump(mut values: Split<&str>) {
                 break;
             }
             println!("start_x: {}", start_x);
-            prev_start_x = start_x
+            prev_start_x = start_x;
+
+            let delay = time::Duration::from_millis(200);
+            thread::sleep(delay);
         }
     }
     let max_x = start_x;
@@ -476,7 +479,7 @@ fn handle_leftjump(mut values: Split<&str>) {
     // This attempts to fix that
     mouse_move_relative(-50, 0, true).0;
 
-    for delta in [10000, 1000, 100, 10, 1].iter() {
+    for delta in [/* 10000, 1000, 100,  */10, 1].iter() {
         println!("delta: {}", delta);
         loop {
             start_y = mouse_move_relative(0, *delta, true).1;
@@ -484,7 +487,10 @@ fn handle_leftjump(mut values: Split<&str>) {
                 break;
             }
             println!("start_x: {}", start_y);
-            prev_start_y = start_y
+            prev_start_y = start_y;
+
+            let delay = time::Duration::from_millis(200);
+            thread::sleep(delay);
         }
     }
     let max_y = start_y;
