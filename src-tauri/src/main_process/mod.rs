@@ -276,6 +276,7 @@ fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData/
                     if mouse_has_been_center_ref.left {
                         post_sleep_data.is_right = true;
                         post_sleep_data.side_position = start_y as f64 / window_size.y.unwrap_or(start_y/2) as f64;
+                        // TODO prevent mouse movement
                     } else {
                         println!("Has not been center yet")
                     }
