@@ -7,6 +7,7 @@ extern crate lazy_static;
 use serde::Serialize;
 use tauri::{App/* , CustomMenuItem, SystemTray, SystemTrayMenu */};
 use std::sync::mpsc::{channel};
+use rdev::{end_rdev};
 
 mod main_process;
 use crate::main_process::main_process;
@@ -100,6 +101,8 @@ fn main() {
                 }
                 println!("Waiting for main_process to finish");
                 let _res = recv_finished.recv(); // result value does not matter here
+                
+                end_rdev();
             }
             _ => {}
         });
