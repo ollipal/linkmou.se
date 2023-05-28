@@ -18,6 +18,12 @@ struct WindowSize {
     y: Option<i32>,
 }
 
+struct MouseUpdateState {
+    updates: i32,
+    too_fasts: i32,
+    too_slows: i32,
+}
+
 const MOUSE_ROLLING_AVG_MULT : f64 = 0.025;
 const MOUSE_TOO_SLOW : f64 = 1.05;
 const MOUSE_TOO_FAST : f64 = 0.95;
@@ -35,6 +41,7 @@ lazy_static! {
     static ref MOUSE_OFFSET_FROM_REAL: Arc<std::sync::Mutex<MouseOffset>> = Arc::new(std::sync::Mutex::new(MouseOffset { x: 0, y: 0 }));
     static ref MOUSE_LATEST_NANO: Arc<std::sync::Mutex<Option<u128>>> = Arc::new(std::sync::Mutex::new(None));
     static ref MOUSE_ROLLING_AVG_UPDATE_INTERVAL: Arc<std::sync::Mutex<u128>> = Arc::new(std::sync::Mutex::new(1000000000/60)); // Assume 60 updates/second at the start
+    static ref MOUSE_UPDATE_STATE: Arc<std::sync::Mutex<MouseUpdateState>> = Arc::new(std::sync::Mutex::new(MouseUpdateState { updates: 0, too_fasts: 0, too_slows: 0 }));
     static ref MOUSE_HAS_BEEN_CENTER: Arc<std::sync::Mutex<MouseHasBeenCenter>> = Arc::new(std::sync::Mutex::new(MouseHasBeenCenter { top: false, left: false, right: false, bottom: false }));
     //static ref WHEEL_SUB_PIXEL_X: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
     //static ref WHEEL_SUB_PIXEL_Y: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
@@ -309,9 +316,25 @@ fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData/
             //println!("diff: {}", mouse_rolling_avg_interval_ref);
             let diff64: u64 = diff.try_into().unwrap();
             let value = diff64 as f64 / *mouse_rolling_avg_interval_ref as f64;
+
+            let mut mouse_update_state = MOUSE_UPDATE_STATE.lock().unwrap();
+            mouse_update_state.updates += 1;
+
+            if mouse_update_state.updates % 100 == 0 {
+                println!(
+                    "Too fasts: {}, too slows: {}, avg: {}",
+                    mouse_update_state.too_fasts,
+                    mouse_update_state.too_slows,
+                    mouse_rolling_avg_interval_ref,
+                );
+                mouse_update_state.updates = 0;
+                mouse_update_state.too_fasts = 0;
+                mouse_update_state.too_slows = 0;
+            }
         
             if value > MOUSE_TOO_SLOW {
-                println!("TOO SLOW: {}, diff: {}", value, mouse_rolling_avg_interval_ref);
+                //println!("TOO SLOW: {}, diff: {}", value, mouse_rolling_avg_interval_ref);
+                mouse_update_state.too_slows += 1;
                 {
                     let mut mouse_offset = MOUSE_OFFSET_FROM_REAL.lock().unwrap();
                     mouse_offset.x = 0;
@@ -321,7 +344,9 @@ fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData/
                 post_sleep_data.mouse_offset.y = 0;
                 None
             } else if value < MOUSE_TOO_FAST {
-                println!("TOO FAST: {}, diff: {}", value, mouse_rolling_avg_interval_ref);
+                //println!("TOO FAST: {}, diff: {}", value, mouse_rolling_avg_interval_ref);
+                mouse_update_state.too_fasts += 1;
+
                 {
                     let mut mouse_offset = MOUSE_OFFSET_FROM_REAL.lock().unwrap();
                     mouse_offset.x = 0;
@@ -653,7 +678,7 @@ pub async fn main_process(
             // Will be taken into account on the next move.
             // Forecasts smoothen the operation, as the mouse updates are doubled.
             if post_sleep_data.mouse_offset.x == 0 && post_sleep_data.mouse_offset.y == 0 {
-                println!("Zero move skipped");
+                //println!("Zero move skipped");
                 return;
             }
 

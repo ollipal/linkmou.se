@@ -497,7 +497,7 @@ where
 
                     if let Some(sleep_amount) = sleep_amount {
                         if post_sleep_data.name == "mousemove" && post_sleep_data.mouse_offset.x == 0 && post_sleep_data.mouse_offset.y == 0 {
-                            println!("Zero move sleep skipped")
+                            //println!("Zero move sleep skipped")
                         } else {
                             sleep(Duration::from_nanos(sleep_amount.try_into().unwrap())).await;
                         }
