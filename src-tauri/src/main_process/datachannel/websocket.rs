@@ -51,7 +51,7 @@ impl WebSocket {
         let (mut write, read) = ws_stream.split();
         
         let set_id_message = json!({
-            "operation": "SET_ID",
+            "operation": "INITIALIZE",
             "id": id
         });
     
@@ -114,7 +114,12 @@ impl WebSocket {
     pub async fn close(&mut self) {
         match &mut self.write {
             Some(write) => {
-                match write.send(tungstenite::Message::Text("CLOSE".to_string())).await
+                let close_message = json!({
+                    "operation": "CLOSE",
+                    "id": "-",
+                }).to_string();
+
+                match write.send(tungstenite::Message::Text(close_message)).await
                 {
                     Ok(_) => (),
                     Err(_) => (),

@@ -6,7 +6,7 @@ use serde::{Serialize, Deserialize};
 use std::io::Write; */
 use std::sync::mpsc::{SyncSender, Receiver};
 use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
-use serde_json::json;
+use serde_json::{json, Value};
 use tokio::time::{sleep, Duration};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -40,12 +40,20 @@ struct SignalingMessage {
     value: String,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct MyRTCIceServer {
+    pub urls: String,
+    pub username: String,
+    pub credential: String,
+}
+
 lazy_static! {
     static ref PEER_CONNECTION_MUTEX: Arc<Mutex<Option<Arc<RTCPeerConnection>>>> =
         Arc::new(Mutex::new(None));
     static ref PENDING_CANDIDATES: Arc<Mutex<Vec<RTCIceCandidate>>> = Arc::new(Mutex::new(vec![]));
     static ref TX: Arc<Mutex<Option<SyncSender<String>>>> = Arc::new(Mutex::new(None));
     static ref RX_STOP_3: Arc<std::sync::Mutex<Option<tokio::sync::mpsc::Receiver<()>>>> = Arc::new(std::sync::Mutex::new(None));
+    static ref ICE_SERVERS: Arc<Mutex<Option<Vec<RTCIceServer>>>> = Arc::new(Mutex::new(None));
 }
 
 pub struct MouseOffset {
@@ -151,11 +159,36 @@ pub async fn process_datachannel_messages<F, G>(
                 },
             };
 
+            if signaling_message.key == "iceServers" {
+                println!("ICE SERVERS: {}", signaling_message.value);
+                // Remove the "protection"
+                //let ice_servers_string = signaling_message.value; //.replace('7', "!").replace('0', "7").replace('!', "0"); // '!' is a temporary value
+                let temp_str = &signaling_message.value;
+                
+                let temp_value = serde_json::from_str::<Vec<MyRTCIceServer>>(&temp_str).unwrap();
+                println!("temp {:?}", temp_value);
+                let ice_servers : Vec<RTCIceServer> = temp_value.iter().map(|s| {
+                    RTCIceServer {
+                        urls: vec![s.urls.to_string()],
+                        username: s.username.to_string(),
+                        credential: s.credential.to_string(),
+                        ..Default::default()
+                    }
+                }).collect();
+
+                {
+                    let mut ice_servers_global = ICE_SERVERS.lock().await;
+                    *ice_servers_global = Some(ice_servers);
+                }
+            
+                return; // pc not ready yet, must return here
+            }
+            
             let pc = {
                 let pcm = PEER_CONNECTION_MUTEX.lock().await;
                 pcm.clone().unwrap()
             };
-
+            
             
             if signaling_message.key == "RTCSessionDescription" {
                 println!("SDP");
@@ -236,6 +269,19 @@ pub async fn process_datachannel_messages<F, G>(
         }.boxed();
 
         let (handle, tx) = websocket::start_send_receive_thread(websocket, &"browser_1234".to_string(), on_ws_receive).await;
+        
+        loop {
+            {
+                if let Some(_ice_servers) = ICE_SERVERS.lock().await.clone() {
+                    break;
+                }
+            }
+            println!("Not yet...");
+            // TODO allow close even when not connected to ws...
+            sleep(Duration::from_millis(1000)).await;
+        }
+        println!("READY");
+        
         {
             let mut tx2 = TX.lock().await;
             *tx2 = Some(tx);
@@ -289,12 +335,17 @@ where
             .init();
     } */
 
+    let ice_servers = ICE_SERVERS.lock().await.clone().unwrap();
+    println!("ICE_SERVERS 2 {:?}", ice_servers);
+
+    println!("NORMAL : {:?}", vec![RTCIceServer {
+        urls: vec!["stun:stun.l.google.com:19302".to_string()],
+        ..Default::default()
+    }]);
+
     // Prepare the configuration
     let config = RTCConfiguration {
-        ice_servers: vec![RTCIceServer {
-            urls: vec!["stun:stun.l.google.com:19302".to_owned()],
-            ..Default::default()
-        }],
+        ice_servers,
         ..Default::default()
     };
 
