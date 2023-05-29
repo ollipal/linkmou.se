@@ -41,10 +41,9 @@
         "fullscreen": false,
         "resizable": false,
         "title": "browserkvm",
-        "width": 800,
-        "height": 600,
-        "center": true,
-        "decorations": true
+        "width": 600,
+        "height": 300,
+        "decorations": false
       }
     ],
     "systemTray": {

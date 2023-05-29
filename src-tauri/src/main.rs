@@ -5,7 +5,8 @@
 extern crate lazy_static;
 
 use serde::Serialize;
-use tauri::{App/* , CustomMenuItem, SystemTray, SystemTrayMenu */};
+use tauri::{App, Manager/* , CustomMenuItem, SystemTray, SystemTrayMenu */};
+use tauri_plugin_positioner::{WindowExt, Position};
 use std::sync::mpsc::{channel};
 use rdev::{end_rdev};
 
@@ -44,7 +45,9 @@ fn mouse_move_relative(_x: i32,_y: i32, /* devices: State<TauriState> */) {
 } */
 
 fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
-    let _app_handle = app.handle();
+    let win = app.get_window("main").unwrap();
+    let _ = win.move_window(Position::BottomRight);
+    //let _app_handle = app.handle();
     Ok(())
 }
 
@@ -79,6 +82,7 @@ fn main() {
     let tray = SystemTray::new().with_menu(tray_menu); */
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_positioner::init())
         /* .system_tray(tray) */
         .setup(|app| setup(app))
         /* .manage(TauriState {
