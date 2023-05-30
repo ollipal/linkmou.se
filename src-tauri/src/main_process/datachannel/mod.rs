@@ -107,6 +107,7 @@ async fn signal_candidate(c: &RTCIceCandidate) -> Result<()> {
 
 //#[tokio::main]
 pub async fn process_datachannel_messages<F, G>(
+    random_id: String,
     on_message_immmediate: F,
     on_message_post_sleep: G,
     recv_stop_2: Receiver<bool>,
@@ -142,7 +143,7 @@ pub async fn process_datachannel_messages<F, G>(
         let mut websocket = WebSocket::new(URL);
 
         println!("websocket: connecting...");
-        if let Err(_) = websocket.connect("desktop_1234".to_string()).await {
+        if let Err(_) = websocket.connect(format!("desktop_{}", random_id)).await {
             continue;
         };
         tries = 0;
@@ -268,7 +269,7 @@ pub async fn process_datachannel_messages<F, G>(
             }
         }.boxed();
 
-        let (handle, tx) = websocket::start_send_receive_thread(websocket, &"browser_1234".to_string(), on_ws_receive).await;
+        let (handle, tx) = websocket::start_send_receive_thread(websocket, &format!("browser_{}", random_id).to_string(), on_ws_receive).await;
         
         loop {
             {

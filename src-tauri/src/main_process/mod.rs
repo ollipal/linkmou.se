@@ -577,6 +577,7 @@ fn handle_mousehide() {
 }
 
 pub async fn main_process(
+    random_id: String,
     //recv_stop_1: Receiver<bool>,
     recv_stop_2: Receiver<bool>,
     recv_stop_3: tokio::sync::mpsc::Receiver<()>,
@@ -585,7 +586,7 @@ pub async fn main_process(
 ) {
     // rdev::listen cannot be stopped, catching a panic is the only workaround
     // https://github.com/Narsil/rdev/issues/72#issuecomment-1374830094
-    let default_hook = panic::take_hook();
+    /* let default_hook = panic::take_hook();
     panic::set_hook(Box::new(move |panic_info| {
         if let Some(msg) = panic_info.payload().downcast_ref::<&str>() {
             if *msg == "LISTEN_STOP_PANIC" {
@@ -597,7 +598,7 @@ pub async fn main_process(
         // If the panic message doesn't match, use the default hook
         println!("Unknown panic caught");
         default_hook(panic_info);
-    }));
+    })); */
 
     /* let rdev_listen_handle = thread::spawn(move || {
         let callback = move |event: Event| {
@@ -687,6 +688,7 @@ pub async fn main_process(
     };
 
     process_datachannel_messages(
+        random_id,
         on_message_immmediate,
         on_message_post_sleep,
         recv_stop_2,

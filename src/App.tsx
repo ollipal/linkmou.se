@@ -1,25 +1,22 @@
 import { createSignal, onMount, onCleanup } from "solid-js";
 import { invoke } from "@tauri-apps/api/tauri";
-import { listen, UnlistenFn } from '@tauri-apps/api/event'
+import { emit, listen, UnlistenFn } from '@tauri-apps/api/event'
 import { appWindow } from '@tauri-apps/api/window'
 import "./App.css";
 
-interface SystemEvent {
+interface MyEvent {
   name: String,
-  x: Number,
-  y: Number,
 }
 
 function App() {
-  const [initialized, setInitialized] = createSignal(false);
   const [name, setName] = createSignal("");
   const [unlisten, setUnlisten] = createSignal<UnlistenFn | undefined>(undefined)
 
   onMount(async () => {
-    await invoke("init");
-    setInitialized(true);
-    const unlisten_events = await listen('system_event', (event) => {
-      const payload = event.payload as SystemEvent;
+    setName(await invoke("get_random_id"));
+    const unlisten_events = await listen('my_event', (event) => {
+      console.log(event);
+      const payload = event.payload as MyEvent;
       console.log(payload.name);
     })
     setUnlisten(() => unlisten_events);
@@ -29,14 +26,6 @@ function App() {
     const u = unlisten();
     if (u) { u() }
   });
-
-  async function mouse_move_relative(x: Number, y: Number) {
-    if (!initialized) {
-      console.log("Not initialized, cannot move mouse")
-      return;
-    }
-    await invoke("mouse_move_relative", { x, y });
-  }
 
   return (
     <div class="container">
@@ -61,21 +50,10 @@ function App() {
           <img src="https://api.iconify.design/mdi:close.svg" alt="close" />
         </div>
       </div>
-
-      <div class="row">
-        <div>
-          <input
-            id="greet-input"
-            onChange={(e) => setName(e.currentTarget.value)}
-            placeholder="Enter a name..."
-          />
-          <button type="button" onClick={() => mouse_move_relative(1, 1)}>
-            Greet
-          </button>
-        </div>
-      </div>
-
-      <p>{name()}</p>
+      <p>{`linkmou.se/${name()}`}</p>
+      <button type="button" onClick={() => emit("event-name", { message: 'Tauri is awesome!' }) /* mouse_move_relative(1, 1) */}>
+        Greet
+      </button>
     </div>
   );
 }
