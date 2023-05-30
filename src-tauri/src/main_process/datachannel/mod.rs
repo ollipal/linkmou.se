@@ -66,6 +66,7 @@ pub struct PostSleepData {
     pub mouse_offset: MouseOffset,
     pub is_right: bool,
     pub side_position: f64,
+    pub is_too_fast: bool,
 }
 
 fn handle_copy_cut() -> String{
@@ -492,6 +493,12 @@ where
                 Box::pin(async move {
                     if post_sleep_data.is_right {
                         if let Err(e) = d_clone2.send_text(format!("mouseright,{}", post_sleep_data.side_position).to_string()).await {
+                            println!("Sending failed: {}", e);
+                        };
+                    }
+
+                    if post_sleep_data.is_too_fast {
+                        if let Err(e) = d_clone2.send_text("toofast".to_string()).await {
                             println!("Sending failed: {}", e);
                         };
                     }

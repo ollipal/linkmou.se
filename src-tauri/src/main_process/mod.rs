@@ -22,6 +22,7 @@ struct MouseUpdateState {
     updates: i32,
     too_fasts: i32,
     too_slows: i32,
+    last_update: u128,
 }
 
 const MOUSE_ROLLING_AVG_MULT : f64 = 0.025;
@@ -29,6 +30,9 @@ const MOUSE_TOO_SLOW : f64 = 1.05;
 const MOUSE_TOO_FAST : f64 = 0.95;
 const MOUSE_JUMP_DISTANCE: f64 = 5.0; // Distance from side when jumped
 const MOUSE_CENTER_DISTANCE: i32 = 35; // Distance from side considered to have been "center"
+const MOUSE_CHECK_FREQUENCY: i32 = 1000;
+const MOUSE_TOO_FAST_UPDATES_LIMIT: u128 = 500000000;
+
 const WHEEL_LINE_IN_PIXELS: f64 = 17.0; // DOM_DELTA_LINE in chromiun 2023, https://stackoverflow.com/a/37474225  
 /* #[cfg(target_os = "windows")]
 const WHEEL_SUPPORTS_PIXEL_MOVE: bool = true;
@@ -41,7 +45,7 @@ lazy_static! {
     static ref MOUSE_OFFSET_FROM_REAL: Arc<std::sync::Mutex<MouseOffset>> = Arc::new(std::sync::Mutex::new(MouseOffset { x: 0, y: 0 }));
     static ref MOUSE_LATEST_NANO: Arc<std::sync::Mutex<Option<u128>>> = Arc::new(std::sync::Mutex::new(None));
     static ref MOUSE_ROLLING_AVG_UPDATE_INTERVAL: Arc<std::sync::Mutex<u128>> = Arc::new(std::sync::Mutex::new(1000000000/60)); // Assume 60 updates/second at the start
-    static ref MOUSE_UPDATE_STATE: Arc<std::sync::Mutex<MouseUpdateState>> = Arc::new(std::sync::Mutex::new(MouseUpdateState { updates: 0, too_fasts: 0, too_slows: 0 }));
+    static ref MOUSE_UPDATE_STATE: Arc<std::sync::Mutex<MouseUpdateState>> = Arc::new(std::sync::Mutex::new(MouseUpdateState { updates: 0, too_fasts: 0, too_slows: 0, last_update: 0 }));
     static ref MOUSE_HAS_BEEN_CENTER: Arc<std::sync::Mutex<MouseHasBeenCenter>> = Arc::new(std::sync::Mutex::new(MouseHasBeenCenter { top: false, left: false, right: false, bottom: false }));
     //static ref WHEEL_SUB_PIXEL_X: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
     //static ref WHEEL_SUB_PIXEL_Y: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
@@ -320,7 +324,7 @@ fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData/
             let mut mouse_update_state = MOUSE_UPDATE_STATE.lock().unwrap();
             mouse_update_state.updates += 1;
 
-            if mouse_update_state.updates % 100 == 0 {
+            if mouse_update_state.updates % MOUSE_CHECK_FREQUENCY == 0 {
                 println!(
                     "Too fasts: {}, too slows: {}, avg: {}",
                     mouse_update_state.too_fasts,
@@ -330,6 +334,15 @@ fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData/
                 mouse_update_state.updates = 0;
                 mouse_update_state.too_fasts = 0;
                 mouse_update_state.too_slows = 0;
+
+                let now = get_epoch_nanos();
+                let diff = now - mouse_update_state.last_update;
+                if diff < MOUSE_TOO_FAST_UPDATES_LIMIT {
+                    println!("TOO FAST ({})", diff);
+                    post_sleep_data.is_too_fast = true;
+                }
+                //if mouse_update_state.last_update != 0 && mouse_update_state.last_update
+                mouse_update_state.last_update = now;
             }
         
             if value > MOUSE_TOO_SLOW {
@@ -641,6 +654,7 @@ pub async fn main_process(
             },
             is_right: false,
             side_position: 0.0,
+            is_too_fast: false,
         };
 
         if &name == "mousemove" {
