@@ -66,11 +66,11 @@ fn get_random_id() -> String {
 }
 
 fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
-    {
+    /* {
         let window = app.get_window("main").unwrap();
         window.open_devtools();
         window.close_devtools();
-    }
+    } */
     
     let win = app.get_window("main").unwrap();
     let _ = win.move_window(Position::BottomRight);
