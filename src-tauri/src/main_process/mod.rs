@@ -53,10 +53,10 @@ lazy_static! {
     static ref MOUSE_LATEST_NANO: Arc<std::sync::Mutex<Option<u128>>> = Arc::new(std::sync::Mutex::new(None));
     static ref MOUSE_ROLLING_AVG_UPDATE_INTERVAL: Arc<std::sync::Mutex<u128>> = Arc::new(std::sync::Mutex::new(1000000000/60)); // Assume 60 updates/second at the start
     static ref MOUSE_UPDATE_STATE: Arc<std::sync::Mutex<MouseUpdateState>> = Arc::new(std::sync::Mutex::new(MouseUpdateState { updates: 0, too_fasts: 0, too_slows: 0, last_update: 0 }));
-    static ref MOUSE_HAS_BEEN_CENTER: Arc<std::sync::Mutex<MouseHasBeenCenter>> = Arc::new(std::sync::Mutex::new(MouseHasBeenCenter { top: false, left: false, right: false, bottom: false }));
+    //static ref MOUSE_HAS_BEEN_CENTER: Arc<std::sync::Mutex<MouseHasBeenCenter>> = Arc::new(std::sync::Mutex::new(MouseHasBeenCenter { top: false, left: false, right: false, bottom: false }));
     //static ref WHEEL_SUB_PIXEL_X: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
     //static ref WHEEL_SUB_PIXEL_Y: Arc<std::sync::Mutex<f64>> = Arc::new(std::sync::Mutex::new(0.0));
-    static ref CHECK_SIDES: Arc<std::sync::Mutex<bool>> = Arc::new(std::sync::Mutex::new(false));
+    //static ref CHECK_SIDES: Arc<std::sync::Mutex<bool>> = Arc::new(std::sync::Mutex::new(false));
 
     // https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_code_values
     // https://source.chromium.org/chromium/chromium/src/+/main:ui/events/keycodes/dom/dom_code_data.inc;l=344;drc=3344b61f7c7f06cf96069751c3bd64d8ec3e3428
@@ -300,12 +300,13 @@ fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData/
         post_sleep_data.mouse_offset.y = y / 2;
     }
 
-    let check_sides = CHECK_SIDES.lock().unwrap().clone();
+    //let check_sides = CHECK_SIDES.lock().unwrap().clone();
+    let check_sides = false;
 
     // Move mouse
-    let (start_x, start_y) = mouse_move_relative(offset_x, offset_y, check_sides);
+    /* let (start_x, start_y) =  */mouse_move_relative(offset_x, offset_y, check_sides);
 
-    // Update if needs jumping
+    /* // Update if needs jumping
     if check_sides {
         {
             let window_size = WINDOW_SIZE.lock().unwrap();
@@ -330,7 +331,7 @@ fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData/
                 }
             }
         }
-    }
+    } */
 
 
     // Update latest mouse nano and save the difference to the previous
@@ -541,7 +542,7 @@ fn handle_paste(mut values: Split<&str>) {
     println!("Pasted {}!", data);
 }
 
-fn handle_leftjump(mut values: Split<&str>) {
+/* fn handle_leftjump(mut values: Split<&str>) {
     {
         let mut mouse_has_been_center_ref = MOUSE_HAS_BEEN_CENTER.lock().unwrap();
         mouse_has_been_center_ref.left = false;
@@ -553,7 +554,7 @@ fn handle_leftjump(mut values: Split<&str>) {
     }
 
     //let (mut prev_start_x, mut prev_start_y) = (-200, -200);
-    //let (mut start_x, mut start_y) = (-100, -100);
+    //let (mut start_x, mut start_y) = (-100, -100); */
 
 
     /* for delta in [/* 10000, 1000, 100,  */10/* , 1 */].iter() {
@@ -572,7 +573,7 @@ fn handle_leftjump(mut values: Split<&str>) {
         }
     } */
 
-    if WINDOW_SIZE.lock().unwrap().x.is_none() {
+    /* if WINDOW_SIZE.lock().unwrap().x.is_none() {
         // Some stupidly large values
         let triple_8k_x = 7680 * 3;
         let triple_8k_y = 4320 * 3;
@@ -591,7 +592,7 @@ fn handle_leftjump(mut values: Split<&str>) {
         println!("max_y!: {}", max_y);
 
         update_window_size(max_x, max_y);
-    }
+    } */
 
 
 
@@ -613,16 +614,16 @@ fn handle_leftjump(mut values: Split<&str>) {
     } */
     //let max_y = start_y;
 
-    let height = values.next().unwrap().parse::<f64>().unwrap();
+    /* let height = values.next().unwrap().parse::<f64>().unwrap();
     //println!("{:?}", EventType::MouseMove { x: window_size.x - MOUSE_JUMP_DISTANCE, y: window_size.y * height }); 
     
     {
         let window_size = WINDOW_SIZE.lock().unwrap();
         send(&EventType::MouseMove { x: (window_size.x.unwrap_or(0) as f64) - MOUSE_JUMP_DISTANCE, y: (window_size.y.unwrap_or(0) as f64) * height });
     }
-}
+} */
 
-fn handle_mousehide() {
+/* fn handle_mousehide() {
     let window_size = WINDOW_SIZE.lock().unwrap();
     send(&EventType::MouseMove { x: (window_size.x.unwrap_or(0) as f64), y: (window_size.y.unwrap_or(0) as f64) * 0.97 });
     {
@@ -633,7 +634,7 @@ fn handle_mousehide() {
         let mut check_sides = CHECK_SIDES.lock().unwrap();
         *check_sides = false;
     }
-}
+} */
 
 fn handle_browserinfo(values: Split<&str>) {
     let json_string_browser_info = &values.fold(String::new(), |a, b| a + "," + b)[1..];
@@ -758,10 +759,10 @@ pub async fn main_process(
             sleep_amount = Some(50 * 1000000);
         } else if &name == "paste" {
             handle_paste(values);
-        } else if &name == "leftjump" {
-            handle_leftjump(values);
-        } else if &name == "mousehide" {
-            handle_mousehide();
+        /* } else if &name == "leftjump" {
+            handle_leftjump(values); */
+        /* } else if &name == "mousehide" {
+            handle_mousehide(); */
         } else if &name == "browserinfo" {
             handle_browserinfo(values);
         } else if &name == "browsersettings" {
