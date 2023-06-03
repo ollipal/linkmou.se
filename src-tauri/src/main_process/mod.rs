@@ -26,8 +26,8 @@ struct MouseUpdateState {
 }
 
 const MOUSE_ROLLING_AVG_MULT : f64 = 0.025;
-const MOUSE_TOO_SLOW : f64 = 1.50;
-const MOUSE_TOO_FAST : f64 = 0.50;
+const MOUSE_TOO_SLOW : f64 = 1.05;
+const MOUSE_TOO_FAST : f64 = 0.85;
 const MOUSE_JUMP_DISTANCE: f64 = 5.0; // Distance from side when jumped
 const MOUSE_CENTER_DISTANCE: i32 = 35; // Distance from side considered to have been "center"
 const MOUSE_CHECK_FREQUENCY: i32 = 1000;
@@ -657,7 +657,7 @@ pub async fn main_process(
             is_too_fast: false,
         };
 
-        if &name == "mousemove" {
+        if &name == "m" { // "m" == "mousemove"
             (sleep_amount, post_sleep_data) = handle_mousemove(values, post_sleep_data);
         } else if &name == "mouseidle" {
             handle_mouseidle();
