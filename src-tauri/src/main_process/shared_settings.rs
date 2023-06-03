@@ -6,24 +6,24 @@ use serde::{Serialize, Deserialize};
 #[allow(non_snake_case)]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DesktopInfo{
-    linkmouseVersion: String,
-    osName: String,
+    pub linkmouseVersion: String,
+    pub osName: String,
 }
 
 #[allow(non_snake_case)]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BrowserInfo{
-    linkmouseVersion: String,
-    osName: String,
-    browserName: String,
+    pub linkmouseVersion: String,
+    pub osName: String,
+    pub browserName: String,
 }
 
 #[allow(non_snake_case)]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BrowserSettings{
-    mouseSpeed: f64,
-    scrollSpeed: f64,
-    scrollReversed: bool,
+    pub mouseSpeed: f64,
+    pub scrollSpeed: f64,
+    pub scrollReversed: bool,
 }
 
 lazy_static! {

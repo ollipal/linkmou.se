@@ -433,8 +433,13 @@ fn handle_mouseup(mut values: Split<&str>) {
 
 fn handle_wheel(mut values: Split<&str>) {
     let delta_mode = values.next().unwrap().parse::<i32>().unwrap();
+    let y_mult = match BROWSER_SETTINGS.lock().unwrap().scrollReversed {
+        true => 1.0,
+        false => -1.0,
+    };
+
     let x = values.next().unwrap().parse::<f64>().unwrap();
-    let y = values.next().unwrap().parse::<f64>().unwrap();
+    let y = values.next().unwrap().parse::<f64>().unwrap() * y_mult;
 
     // deltaModes: https://developer.mozilla.org/en-US/docs/Web/API/Element/wheel_event#event_properties
     // Treat DOM_DELTA_LINE and DOM_DELTA_PAGE the same for now
