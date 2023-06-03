@@ -26,6 +26,10 @@ struct MouseUpdateState {
     last_update: u128,
 }
 
+struct MouseSubPixelRemainders {
+    pub x: f64,
+    pub y: f64,
+}
 
 const MOUSE_ROLLING_AVG_MULT : f64 = 0.025;
 const MOUSE_TOO_SLOW : f64 = 1.05;
@@ -45,6 +49,7 @@ lazy_static! {
     static ref WINDOW_SIZE: Arc<std::sync::Mutex<WindowSize>> = Arc::new(std::sync::Mutex::new(WindowSize { x: None, y: None }));
     //static ref MOUSE_LATEST_POS: Arc<std::sync::Mutex<MousePosition>> = Arc::new(std::sync::Mutex::new(MousePosition { x: 0.0, y: 0.0 }));
     static ref MOUSE_OFFSET_FROM_REAL: Arc<std::sync::Mutex<MouseOffset>> = Arc::new(std::sync::Mutex::new(MouseOffset { x: 0, y: 0 }));
+    static ref MOUSE_SUB_PIXEL_REMAINDERS: Arc<std::sync::Mutex<MouseSubPixelRemainders>> = Arc::new(std::sync::Mutex::new(MouseSubPixelRemainders{ x: 0.0, y: 0.0 }));
     static ref MOUSE_LATEST_NANO: Arc<std::sync::Mutex<Option<u128>>> = Arc::new(std::sync::Mutex::new(None));
     static ref MOUSE_ROLLING_AVG_UPDATE_INTERVAL: Arc<std::sync::Mutex<u128>> = Arc::new(std::sync::Mutex::new(1000000000/60)); // Assume 60 updates/second at the start
     static ref MOUSE_UPDATE_STATE: Arc<std::sync::Mutex<MouseUpdateState>> = Arc::new(std::sync::Mutex::new(MouseUpdateState { updates: 0, too_fasts: 0, too_slows: 0, last_update: 0 }));
@@ -248,8 +253,37 @@ fn handle_mousemove(mut values: Split<&str>, mut post_sleep_data: PostSleepData/
     // When lagging theres is extra gap (slow) and then burst of positions (fast)
 
     // Get the next real position (relative)
-    let x = values.next().unwrap().parse::<i32>().unwrap();
-    let y = values.next().unwrap().parse::<i32>().unwrap();
+    let x_preprosessed = values.next().unwrap().parse::<i32>().unwrap();
+    let y_preprosessed = values.next().unwrap().parse::<i32>().unwrap();
+
+    // Multiply by speed, add previous remainders, and save new ones
+    let mult = {
+        let browser_settings = BROWSER_SETTINGS.lock().unwrap();
+        browser_settings.mouseSpeed
+    };
+
+    let (x, y) = {
+        let mut mouse_sub_pixel_remainders = MOUSE_SUB_PIXEL_REMAINDERS.lock().unwrap();
+
+        //println!("x_pre: {}", x_preprosessed);
+        //println!("mult: {}", mult);
+        //println!("mouse_sub_pixel_remainders.x: {}", mouse_sub_pixel_remainders.x);
+
+        let x_f64 = (x_preprosessed as f64).mul_add(mult, mouse_sub_pixel_remainders.x);
+        let x = x_f64.floor() as i32;
+        mouse_sub_pixel_remainders.x = x_f64.fract();
+
+        //println!("x_f64: {}", x_f64);
+        //println!("x: {}", x);
+        //println!("mouse_sub_pixel_remainders.x: {}", mouse_sub_pixel_remainders.x);
+        //println!("");
+
+        let y_f64 = (y_preprosessed as f64).mul_add(mult, mouse_sub_pixel_remainders.y);
+        let y = y_f64.floor() as i32;
+        mouse_sub_pixel_remainders.y = y_f64.fract();
+
+        (x,y)
+    };
 
     // Calculate the how much should be moved when
     //forecast position has been taken into account
@@ -438,8 +472,13 @@ fn handle_wheel(mut values: Split<&str>) {
         false => -1.0,
     };
 
-    let x = values.next().unwrap().parse::<f64>().unwrap();
-    let y = values.next().unwrap().parse::<f64>().unwrap() * y_mult;
+    let speed_mult = {
+        let browser_settings = BROWSER_SETTINGS.lock().unwrap();
+        browser_settings.scrollSpeed
+    };
+
+    let x = values.next().unwrap().parse::<f64>().unwrap() * speed_mult;
+    let y = values.next().unwrap().parse::<f64>().unwrap() * speed_mult * y_mult;
 
     // deltaModes: https://developer.mozilla.org/en-US/docs/Web/API/Element/wheel_event#event_properties
     // Treat DOM_DELTA_LINE and DOM_DELTA_PAGE the same for now
