@@ -1,7 +1,8 @@
 mod datachannel;
+mod shared_settings;
 use std::{sync::{Arc}, time::{UNIX_EPOCH, SystemTime, self}, str::Split, thread, collections::HashMap, panic};
 use lazy_static::__Deref;
-use crate::main_process::datachannel::{process_datachannel_messages, MouseOffset, PostSleepData};
+use crate::main_process::{datachannel::{process_datachannel_messages, MouseOffset, PostSleepData}, shared_settings::SHARED_SETTINGS};
 use copypasta::{ClipboardContext, ClipboardProvider};
 use rdev::{Button, EventType, Key, SimulateError, simulate, mouse_move_relative, scroll_lines, scroll_pixels};
 use std::sync::mpsc::{Receiver, Sender};
@@ -24,6 +25,7 @@ struct MouseUpdateState {
     too_slows: i32,
     last_update: u128,
 }
+
 
 const MOUSE_ROLLING_AVG_MULT : f64 = 0.025;
 const MOUSE_TOO_SLOW : f64 = 1.05;
@@ -597,6 +599,8 @@ pub async fn main_process(
     /* recv_stop_4: Receiver<bool>, */
     send_finished: Sender<bool>,
 ) {
+
+    println!("{:?}", SHARED_SETTINGS.lock().unwrap());
     // rdev::listen cannot be stopped, catching a panic is the only workaround
     // https://github.com/Narsil/rdev/issues/72#issuecomment-1374830094
     /* let default_hook = panic::take_hook();
