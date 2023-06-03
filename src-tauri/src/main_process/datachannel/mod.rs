@@ -1,5 +1,6 @@
 use anyhow::Result;
 use futures::{FutureExt};
+use lazy_static::__Deref;
 /* use lazy_static::__Deref; */
 use serde::{Serialize, Deserialize};
 /* use std::fmt::format;
@@ -27,6 +28,7 @@ use copypasta::{ClipboardContext, ClipboardProvider};
 
 mod websocket;
 use crate::main_process::datachannel::websocket::{WebSocket, CLOSE, CLOSE_IMMEDIATE};
+use crate::main_process::shared_settings::DESKTOP_INFO;
 
 //const URL: &str = "ws://localhost:3001";
 const URL: &str = "wss://browserkvm-backend.onrender.com:443";
@@ -461,9 +463,20 @@ where
             //let d2 =  Arc::clone(&d);
             let d_label2 = d_label.clone();
             let d_id2 = d_id;
+            let d2 = d.clone();
             d.on_open(Box::new(move || {
                 println!("Data channel '{d_label2}'-'{d_id2}' open. Random messages will now be sent to any connected DataChannels every 5 seconds");
-                Box::pin(async /* move */ {
+                Box::pin(async move {
+                    {   
+                        let desktop_info = DESKTOP_INFO.lock().unwrap().clone();
+                        let desktop_info_json = serde_json::to_string(&desktop_info).unwrap();
+
+                        if let Err(e) = d2.send_text(format!("desktopinfo,{}", desktop_info_json).to_string()).await {
+                            println!("Sending failed: {}", e);
+                        };
+                    }
+
+
                     /* let mut result = Result::<usize>::Ok(0);
                     while result.is_ok() {
                         // Fix lag spikes: https://stackoverflow.com/a/37144680

@@ -2,7 +2,7 @@ mod datachannel;
 mod shared_settings;
 use std::{sync::{Arc}, time::{UNIX_EPOCH, SystemTime, self}, str::Split, thread, collections::HashMap, panic};
 use lazy_static::__Deref;
-use crate::main_process::{datachannel::{process_datachannel_messages, MouseOffset, PostSleepData}, shared_settings::SHARED_SETTINGS};
+use crate::main_process::{datachannel::{process_datachannel_messages, MouseOffset, PostSleepData}, shared_settings::{BrowserInfo, BrowserSettings, BROWSER_INFO, BROWSER_SETTINGS, DESKTOP_INFO}};
 use copypasta::{ClipboardContext, ClipboardProvider};
 use rdev::{Button, EventType, Key, SimulateError, simulate, mouse_move_relative, scroll_lines, scroll_pixels};
 use std::sync::mpsc::{Receiver, Sender};
@@ -591,6 +591,40 @@ fn handle_mousehide() {
     }
 }
 
+fn handle_browserinfo(values: Split<&str>) {
+    let json_string_browser_info = &values.fold(String::new(), |a, b| a + "," + b)[1..];
+    let browser_info : BrowserInfo = match serde_json::from_str(&json_string_browser_info) {
+        Ok(res) => res,
+        Err(e) => {
+            println!("Could not serialize  BrowserInfo message: {}", e);
+            return;
+        },
+    };
+
+    {
+        *BROWSER_INFO.lock().unwrap() = browser_info;
+    }
+
+    //println!("Pasted1 {:?}", BROWSER_INFO.lock().unwrap());
+}
+
+fn handle_browsersettings(values: Split<&str>) {
+    let json_string_browser_settings = &values.fold(String::new(), |a, b| a + "," + b)[1..];
+    let browser_settings : BrowserSettings = match serde_json::from_str(&json_string_browser_settings) {
+        Ok(res) => res,
+        Err(e) => {
+            println!("Could not serialize  BrowserInfo message: {}", e);
+            return;
+        },
+    };
+
+    {
+        *BROWSER_SETTINGS.lock().unwrap() = browser_settings;
+    }
+
+    //println!("Pasted1 {:?}", BROWSER_SETTINGS.lock().unwrap());
+}
+
 pub async fn main_process(
     random_id: String,
     //recv_stop_1: Receiver<bool>,
@@ -600,7 +634,7 @@ pub async fn main_process(
     send_finished: Sender<bool>,
 ) {
 
-    println!("{:?}", SHARED_SETTINGS.lock().unwrap());
+    println!("{:?}", DESKTOP_INFO.lock().unwrap());
     // rdev::listen cannot be stopped, catching a panic is the only workaround
     // https://github.com/Narsil/rdev/issues/72#issuecomment-1374830094
     /* let default_hook = panic::take_hook();
@@ -684,6 +718,10 @@ pub async fn main_process(
             handle_leftjump(values);
         } else if &name == "mousehide" {
             handle_mousehide();
+        } else if &name == "browserinfo" {
+            handle_browserinfo(values);
+        } else if &name == "browsersettings" {
+            handle_browsersettings(values);
         } else {
             println!("Unknown event.name: {}", name);
         }
