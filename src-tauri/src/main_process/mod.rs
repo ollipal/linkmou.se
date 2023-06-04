@@ -489,6 +489,36 @@ fn handle_wheel(mut values: Split<&str>) {
     }
 }
 
+fn code_to_rdev_key(code: &str) -> Option<&Key>{
+    let key = CODE_TO_RDEV_KEY.get(code);
+    match key {
+        Some(Key::MetaRight) => {
+            let os_name = &DESKTOP_INFO.lock().unwrap().osName;
+            if os_name == "macos" {
+                println!("Keeping MetaRight as MetaRight");
+                Some(&Key::MetaRight)
+            } else {
+                println!("Converting MetaRight to MetaLeft");
+                Some(&Key::MetaLeft)
+            }
+        }
+        Some(Key::MetaLeft) => {
+            let os_name = &DESKTOP_INFO.lock().unwrap().osName;
+            if os_name == "macos" {
+                println!("Keeping MetaLeft as MetaLeft");
+                Some(&Key::MetaLeft)
+            } else {
+                println!("Converting MetaLeft to ControlLeft");
+                Some(&Key::ControlLeft)
+            }
+        }
+        Some(key) => {
+            Some(key)
+        }
+        None => None,
+    }
+}
+
 fn handle_keydown(mut values: Split<&str>) {
     // TODO make sutre there is at least 20 ms between kay presses (even on rdev)
     // https://github.com/enigo-rs/enigo/issues/105
@@ -506,7 +536,7 @@ fn handle_keydown(mut values: Split<&str>) {
         send(&EventType::KeyRelease(Key::ControlLeft));
     }
 
-    let key = CODE_TO_RDEV_KEY.get(code);
+    let key = code_to_rdev_key(code);
     match key {
         Some(key) => send(&EventType::KeyPress(*key)),
         None => println!("Unknown code: {}", code),
@@ -520,7 +550,7 @@ fn handle_keyup(mut values: Split<&str>) {
     let command = format!("key_up,{},{}", code, key);
     println!("{}", command);
     
-    let key = CODE_TO_RDEV_KEY.get(code);
+    let key = code_to_rdev_key(code);
     match key {
         Some(key) => send(&EventType::KeyRelease(*key)),
         None => println!("Unknown code: {}", code),
