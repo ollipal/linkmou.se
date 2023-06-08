@@ -71,7 +71,7 @@ fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
         window.open_devtools();
         window.close_devtools();
     } */
-    
+
     let win = app.get_window("main").unwrap();
     let _ = win.move_window(Position::BottomRight);
     let app_handle = app.handle();

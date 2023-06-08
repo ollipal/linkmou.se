@@ -16,6 +16,7 @@ pub struct BrowserInfo{
     pub linkmouseVersion: String,
     pub osName: String,
     pub browserName: String,
+    pub engineName: String,
 }
 
 #[allow(non_snake_case)]
@@ -38,6 +39,7 @@ lazy_static! {
             linkmouseVersion: "unknown".to_string(),
             osName: "unknown".to_string(),
             browserName: "unknown".to_string(),
+            engineName: "unknown".to_string(),
         }
     ));
     pub static ref BROWSER_SETTINGS: Arc<Mutex<BrowserSettings>> = Arc::new(Mutex::new(
