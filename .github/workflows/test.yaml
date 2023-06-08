@@ -1,0 +1,12 @@
+# Copied from: https://github.com/tauri-apps/tauri-action#creating-a-release-and-uploading-the-tauri-bundles
+name: 'submodule'
+on: workflow_dispatch
+
+jobs:
+  submodule:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+          token: ${{ secrets.PAT_TOKEN }}

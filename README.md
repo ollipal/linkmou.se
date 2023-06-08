@@ -19,3 +19,9 @@ cargo build --example answer && ./target/debug/examples/answer
 ## Submoduled rdev-fast
 
 Added with: `git submodule add -b fast git@github.com:ollipal/rdev-fast.git`
+
+Access token generated here: https://github.com/settings/personal-access-tokens/new
+
+Requires access to rdev-fast & linkmouse repo, contents = Read-only
+
+TODO: how to update????
