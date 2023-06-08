@@ -7,8 +7,8 @@
     "withGlobalTauri": false
   },
   "package": {
-    "productName": "browserkvm",
-    "version": "0.0.25"
+    "productName": "linkmouse",
+    "version": "0.0.26"
   },
   "tauri": {
     "allowlist": {
