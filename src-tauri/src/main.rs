@@ -25,8 +25,8 @@ const ID_SECTION_AMOUNT: i32 = 4;
 fn random_lowercase_letter_or_digit() -> char {
     let mut rng = OsRng;
     // 01ol dropped due to being easy to mix
-    //let chars: Vec<char> = "abcdefghijkmnpqrstuvwxyz23456789".chars().collect();
-    let chars: Vec<char> = "a".chars().collect();
+    let chars: Vec<char> = "abcdefghijkmnpqrstuvwxyz23456789".chars().collect();
+    //let chars: Vec<char> = "a".chars().collect();
     let index = rng.gen_range(0..chars.len());
     chars.get(index).unwrap().clone()
 }
