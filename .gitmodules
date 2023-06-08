@@ -1,0 +1,4 @@
+[submodule "rdev-fast"]
+	path = rdev-fast
+	url = git@github.com:ollipal/rdev-fast.git
+	branch = fast
