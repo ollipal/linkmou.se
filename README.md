@@ -25,3 +25,5 @@ Access token generated here: https://github.com/settings/personal-access-tokens/
 Requires access to rdev-fast & linkmouse repo, contents = Read-only
 
 TODO: how to update????
+
+After cloning fresh repo: `git submodule update --init --recursive`

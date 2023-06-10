@@ -45,8 +45,15 @@ fn random_id() -> String {
     return id;
 }
 
+struct StopInformation {
+    send_stop_2: Option<std::sync::mpsc::Sender<bool>>,
+    send_stop_3: Option<tokio::sync::mpsc::Sender<()>>,
+    recv_finished: Option<std::sync::mpsc::Receiver<bool>>,
+}
+
 lazy_static! {
     static ref RANDOM_ID: Arc<Mutex<String>> = Arc::new(Mutex::new(random_id()));
+    static ref STOP_INFORMATION: Arc<Mutex<StopInformation>> = Arc::new(Mutex::new(StopInformation { send_stop_2: None, send_stop_3: None, recv_finished: None }));
 }
 
 /* mod datachannel;
@@ -63,6 +70,21 @@ struct MyEvent {
 #[tauri::command]
 fn get_random_id() -> String {
     return RANDOM_ID.lock().unwrap().to_string();
+}
+
+#[tauri::command]
+fn restart_connection() {
+    stop_connection();
+    start_connection();
+}
+
+#[tauri::command]
+fn change_random_id() {
+    {
+        let mut id = RANDOM_ID.lock().unwrap();
+        *id = random_id();
+    }
+    restart_connection();
 }
 
 fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
@@ -92,12 +114,19 @@ fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
     Ok(())
 }
 
-fn main() {
+fn start_connection() {
     //let (send_stop_1, recv_stop_1) = channel();
     let (send_stop_2, recv_stop_2) = channel();
     let (send_stop_3, recv_stop_3) = tokio::sync::mpsc::channel::<()>(1);
     //let (send_stop_4, recv_stop_4) = channel();
     let (send_finished, recv_finished) = channel();
+
+    {
+        let mut stop_information = STOP_INFORMATION.lock().unwrap();
+        stop_information.send_stop_2 = Some(send_stop_2);
+        stop_information.send_stop_3 = Some(send_stop_3);
+        stop_information.recv_finished = Some(recv_finished);
+    }
 
 
     let _main_handler = thread::spawn(move || {
@@ -116,6 +145,25 @@ fn main() {
                 ).await;
             });
     });
+}
+
+fn stop_connection() {
+    let stop_information = STOP_INFORMATION.lock().unwrap();
+
+    if let Err(e) = stop_information.send_stop_2.clone().unwrap().send(true) {
+        println!("Could not send stop 2 {}", e);
+    }
+    if let Err(e) = stop_information.send_stop_3.clone().unwrap().try_send(()) {
+        println!("Could not send stop 3 {}", e);
+    }
+    println!("Waiting for main_process to finish");
+    let _res = stop_information.recv_finished.as_ref().unwrap().recv(); // result value does not matter here
+    
+    end_rdev();
+}
+
+fn main() {
+    start_connection();
 
     /* let open = CustomMenuItem::new("open".to_string(), "Open");
     let quit = CustomMenuItem::new("quit".to_string(), "Quit");
@@ -130,7 +178,11 @@ fn main() {
         /* .manage(TauriState {
             enigo: Default::default(),
         }) */
-        .invoke_handler(tauri::generate_handler![get_random_id])
+        .invoke_handler(tauri::generate_handler![
+            get_random_id,
+            restart_connection,
+            change_random_id,
+        ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(move |_app_handle, event| match event {
@@ -139,16 +191,7 @@ fn main() {
                 /* if let Err(e) = send_stop_1.send(true) {
                     println!("Could not send stop 1 {}", e);
                 } */
-                if let Err(e) = send_stop_2.send(true) {
-                    println!("Could not send stop 2 {}", e);
-                }
-                if let Err(e) = send_stop_3.try_send(()) {
-                    println!("Could not send stop 3 {}", e);
-                }
-                println!("Waiting for main_process to finish");
-                let _res = recv_finished.recv(); // result value does not matter here
-                
-                end_rdev();
+                stop_connection();
             }
             _ => {}
         });

@@ -51,8 +51,20 @@ function App() {
         </div>
       </div>
       <p>{`linkmou.se/${name()}`}</p>
-      <button type="button" onClick={() => emit("event-name", { message: 'Tauri is awesome!' }) /* mouse_move_relative(1, 1) */}>
-        Greet
+      <button type="button" onClick={async () => {
+        await invoke("restart_connection");
+        setName(await invoke("get_random_id"));
+      }}>
+        Restart connection
+      </button>
+      <button type="button" onClick={async () => {
+        await invoke("change_random_id");
+        setName(await invoke("get_random_id"));
+      }}>
+        Change link
+      </button>
+      <button type="button" onClick={() => emit("event-name", { message: 'Tauri is awesome!' })}>
+        Test button
       </button>
     </div>
   );
