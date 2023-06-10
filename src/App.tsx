@@ -51,6 +51,18 @@ function App() {
         </div>
       </div>
       <p>{`linkmou.se/${name()}`}</p>
+      <button type="button" onClick={() => {
+        navigator.clipboard.writeText(`linkmou.se/${name()}`).then(
+          () => {
+            /* clipboard successfully set */
+          },
+          () => {
+            console.log("Copy fail")
+          }
+        );
+      }}>
+        Copy link
+      </button>
       <button type="button" onClick={async () => {
         await invoke("restart_connection");
         setName(await invoke("get_random_id"));
