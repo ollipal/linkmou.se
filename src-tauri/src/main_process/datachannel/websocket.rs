@@ -26,6 +26,11 @@ struct WebSocketMessage {
     content: String,
 }
 
+pub struct RecvResult {
+    pub msg: Option<String>,
+    pub disconnected: bool,
+}
+
 pub static CLOSE: &str = "CLOSE"; // NOTE: this can cause closing getting stuck, if just before CLOSE_IMMEDIATE
 pub static CLOSE_IMMEDIATE: &str = "CLOSE_IMMEDIATE";
 
@@ -65,10 +70,10 @@ impl WebSocket {
         Ok(())
     }
 
-    pub async fn recv(&mut self) -> Option<String> {
+    pub async fn recv(&mut self) -> RecvResult {
         let read = match &mut self.read {
             Some(read) => read,
-            None => return None,
+            None => return RecvResult { msg: None, disconnected: false },
         };
 
         let message = match read.next().await {
@@ -81,18 +86,18 @@ impl WebSocket {
                         Error::Protocol(_) => (),
                         _ => println!("New error while reading message {}", e),
                     };
-                    return None;
+                    return RecvResult { msg: None, disconnected: true };
                 }
             },
             None => {
                 println!("Websocket has disconnected most likely");
-                return None;
+                return RecvResult { msg: None, disconnected: true };
             }
         };
 
         match message.into_text() {
-            Ok(text) => Some(text),
-            Err(_) => None,
+            Ok(text) => RecvResult { msg: Some(text), disconnected: false },
+            Err(_) => RecvResult { msg: None, disconnected: false },
         }
     }
 
@@ -136,12 +141,12 @@ impl WebSocket {
 }
 
 
-async fn read_message(websocket: &mut WebSocket) -> Option<String> {
+async fn read_message(websocket: &mut WebSocket) -> RecvResult {
     let msg = websocket.recv().await;
 
-    if msg.is_none() { // Give more time for wait() to finish...
-        wait(2 * WEBSOCKET_MESSAGE_CHECK_DELAY).await;
-    }
+    //if msg.msg.is_none() { // Give more time for wait() to finish...
+        
+    //}
 
     msg
 }
@@ -150,13 +155,15 @@ async fn wait(duration: u64) {
     sleep(Duration::from_millis(duration)).await;
 }
 
-pub async fn start_send_receive_thread<C>(
+pub async fn start_send_receive_thread<C, H>(
     mut websocket: WebSocket,
     recipient: &String,
     on_ws_receive: C,
+    send_event_to_front_end: H,
 ) -> (tokio::task::JoinHandle<()>, SyncSender<std::string::String>)
 where
     C: FnOnce(String) -> BoxFuture<'static, ()> + 'static + std::marker::Copy + std::marker::Send,
+    H: FnOnce(String) -> () + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
     // BoxFuture tip from here: https://www.bitfalter.com/async-closures
 {
 
@@ -219,14 +226,19 @@ where
             println!("selecting...");
             tokio::select! {
                 msg = read_message(&mut websocket) => {
-                    match msg {
-                        None => println!("websocket: received None"),
-                        Some(msg) => {
-                            //println!("websocket: received: {}", msg);
-                            on_ws_receive(msg).await;
-                        },
-                    }
-                    
+                    if msg.disconnected {
+                        println!("DISCONNECTEDDDDDDD");
+                        send_event_to_front_end("SERVER DISCONNECTED, CLICK RESTART CONNECTION".to_string());
+                        wait(2 * WEBSOCKET_MESSAGE_CHECK_DELAY).await;
+                    } else {
+                        match msg.msg {
+                            None => println!("websocket: received None"),
+                            Some(msg) => {
+                                println!("websocket: received: {}", msg);
+                                on_ws_receive(msg).await;
+                            },
+                        }
+                    }                    
                 }
                 // TODO change the duration to longer if connected for a while
                 // or even cut the connection

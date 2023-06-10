@@ -5,7 +5,7 @@
 extern crate lazy_static;
 
 use serde::Serialize;
-use tauri::{App, Manager/* , CustomMenuItem, SystemTray, SystemTrayMenu */};
+use tauri::{App, Manager, AppHandle/* , CustomMenuItem, SystemTray, SystemTrayMenu */};
 use tauri_plugin_positioner::{WindowExt, Position};
 use std::sync::{mpsc::{channel}, Arc, Mutex};
 use rdev::{end_rdev};
@@ -20,7 +20,7 @@ use crate::main_process::main_process;
 use std::{thread};
 
 const ID_SECTION_LEN: i32 = 6;
-const ID_SECTION_AMOUNT: i32 = 4;
+const ID_SECTION_AMOUNT: i32 = 1; // 4;
 
 fn random_lowercase_letter_or_digit() -> char {
     let mut rng = OsRng;
@@ -54,6 +54,8 @@ struct StopInformation {
 lazy_static! {
     static ref RANDOM_ID: Arc<Mutex<String>> = Arc::new(Mutex::new(random_id()));
     static ref STOP_INFORMATION: Arc<Mutex<StopInformation>> = Arc::new(Mutex::new(StopInformation { send_stop_2: None, send_stop_3: None, recv_finished: None }));
+    static ref APP_HANDLE: Arc<Mutex<Option<AppHandle>>> = Arc::new(Mutex::new(None));
+    static ref LATEST_MY_EVENT: Arc<Mutex<MyEvent>> = Arc::new(Mutex::new(MyEvent { name: "CONNECTING SERVER".to_string() }));
 }
 
 /* mod datachannel;
@@ -87,6 +89,31 @@ fn change_random_id() {
     restart_connection();
 }
 
+#[tauri::command]
+fn get_latest_my_event() {
+    let name;
+    {
+        name = LATEST_MY_EVENT.lock().unwrap().clone().name;   
+    }
+    send_event_to_front_end(name.to_string());
+}
+
+fn send_event_to_front_end(name: String) {
+    let my_event = MyEvent { name };
+
+    {
+        let mut e = LATEST_MY_EVENT.lock().unwrap();
+        *e = my_event.clone();
+    }
+
+
+    if let Some(app_handle) = APP_HANDLE.lock().unwrap().clone() {
+        app_handle.emit_all("my_event", my_event.clone()).unwrap();
+    } else {
+        println!("Could not emit: {}", my_event.clone().name);
+    }
+}
+
 fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
     /* {
         let window = app.get_window("main").unwrap();
@@ -96,12 +123,15 @@ fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
 
     let win = app.get_window("main").unwrap();
     let _ = win.move_window(Position::BottomRight);
-    let app_handle = app.handle();
+    {
+        let mut handle = APP_HANDLE.lock().unwrap();
+        *handle = Some(app.handle());
+    }
+
     /* tauri::async_runtime::spawn(async move {
       // listen to the `event-name` (emitted on any window) */
       let id = app.listen_global("event-name", move |event| {
         println!("got event-name with payload {:?}", event.payload());
-        app_handle.emit_all("my_event", MyEvent { name: "payload".to_string()}).unwrap();
       });
       // unlisten to the event using the `id` returned on the `listen_global` function
       // a `once_global` API is also exposed on the `App` struct
@@ -142,6 +172,7 @@ fn start_connection() {
                     recv_stop_3,
                     /* recv_stop_4, */
                     send_finished,
+                    send_event_to_front_end,
                 ).await;
             });
     });
@@ -182,6 +213,7 @@ fn main() {
             get_random_id,
             restart_connection,
             change_random_id,
+            get_latest_my_event,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

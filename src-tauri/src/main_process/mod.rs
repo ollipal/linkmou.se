@@ -700,14 +700,19 @@ fn handle_browsersettings(values: Split<&str>) {
     //println!("Pasted1 {:?}", BROWSER_SETTINGS.lock().unwrap());
 }
 
-pub async fn main_process(
+pub async fn main_process<H>(
     random_id: String,
     //recv_stop_1: Receiver<bool>,
     recv_stop_2: Receiver<bool>,
     recv_stop_3: tokio::sync::mpsc::Receiver<()>,
     /* recv_stop_4: Receiver<bool>, */
     send_finished: Sender<bool>,
-) {
+    send_event_to_front_end: H,
+)
+    where
+        H: FnOnce(String) -> () + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
+{
+
 
     println!("{:?}", DESKTOP_INFO.lock().unwrap());
     // rdev::listen cannot be stopped, catching a panic is the only workaround
@@ -824,6 +829,7 @@ pub async fn main_process(
         on_message_post_sleep,
         recv_stop_2,
         recv_stop_3,
+        send_event_to_front_end,
     ).await;
 
     /* println!("Waiting listen to join");

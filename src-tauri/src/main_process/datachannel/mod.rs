@@ -109,17 +109,19 @@ async fn signal_candidate(c: &RTCIceCandidate) -> Result<()> {
 }
 
 //#[tokio::main]
-pub async fn process_datachannel_messages<F, G>(
+pub async fn process_datachannel_messages<F, G, H>(
     random_id: String,
     on_message_immmediate: F,
     on_message_post_sleep: G,
     recv_stop_2: Receiver<bool>,
     recv_stop_3: tokio::sync::mpsc::Receiver<()>,
     /* recv_stop_4: Receiver<bool>, */
+    send_event_to_front_end: H,
 )
     where
         F: FnOnce(String) -> (Option<u128>, PostSleepData) + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
         G: FnOnce(PostSleepData) -> () + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
+        H: FnOnce(String) -> () + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
 {
     {
         let mut rx3 = RX_STOP_3.lock().unwrap();
@@ -146,13 +148,15 @@ pub async fn process_datachannel_messages<F, G>(
         let mut websocket = WebSocket::new(URL);
 
         println!("websocket: connecting...");
+        send_event_to_front_end("CONNECTING SERVER".to_string());
         if let Err(_) = websocket.connect(format!("desktop_{}", random_id)).await {
             continue;
         };
         tries = 0;
         println!("websocket: ...connected");
+        send_event_to_front_end("SERVER CONNECTED, WAITING USER".to_string());
 
-        let on_ws_receive = | msg: String | async move {
+        let on_ws_receive = move | msg: String | async move {
             println!("websocket: received: {}", msg);
 
             let signaling_message: SignalingMessage = match serde_json::from_str(&msg) {
@@ -196,6 +200,7 @@ pub async fn process_datachannel_messages<F, G>(
             
             if signaling_message.key == "RTCSessionDescription" {
                 println!("SDP");
+                send_event_to_front_end("USER CONNECTING".to_string());
                 let sdp_str = &signaling_message.value;
 
                 let sdp = match serde_json::from_str::<RTCSessionDescription>(&sdp_str) {
@@ -272,7 +277,7 @@ pub async fn process_datachannel_messages<F, G>(
             }
         }.boxed();
 
-        let (handle, tx) = websocket::start_send_receive_thread(websocket, &format!("browser_{}", random_id).to_string(), on_ws_receive).await;
+        let (handle, tx) = websocket::start_send_receive_thread(websocket, &format!("browser_{}", random_id).to_string(), on_ws_receive, send_event_to_front_end).await;
         
         loop {
             {
@@ -294,6 +299,7 @@ pub async fn process_datachannel_messages<F, G>(
         let result = connect_datachannel_and_process_messages(
             on_message_immmediate,
             on_message_post_sleep,
+            send_event_to_front_end,
         ).await.unwrap();
 
         if let Err(e) = handle.await {
@@ -313,13 +319,15 @@ pub async fn process_datachannel_messages<F, G>(
     //});
 }
 
-async fn connect_datachannel_and_process_messages<F, G>(
+async fn connect_datachannel_and_process_messages<F, G, H>(
     on_message_immmediate: F,
     on_message_post_sleep: G,
+    send_event_to_front_end: H,
 ) -> Result<String>
 where
     F: FnOnce(String) -> (Option<u128>, PostSleepData) + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
     G: FnOnce(PostSleepData) -> () + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
+    H: FnOnce(String) -> () + std::marker::Sync + std::marker::Send + 'static + std::marker::Copy,
 {
     /* let debug = matches.is_present("debug");
     if debug {
@@ -449,6 +457,7 @@ where
         let d_label = d.label().to_owned();
         let d_id = d.id();
         println!("New DataChannel {d_label} {d_id}");
+        send_event_to_front_end("USER CONNECTED".to_string());
 
         let done_tx2_clone = done_tx2.clone();
 
@@ -536,6 +545,7 @@ where
             d.on_close(Box::new(move || {
                 println!("DC CLOSE");
                 let _ = done_tx2_clone.try_send(());
+                send_event_to_front_end("USER DISCONNECTED".to_string());
                 Box::pin(async{})
             }));
         })

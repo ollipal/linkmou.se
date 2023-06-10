@@ -5,11 +5,12 @@ import { appWindow } from '@tauri-apps/api/window'
 import "./App.css";
 
 interface MyEvent {
-  name: String,
+  name: string,
 }
 
 function App() {
   const [name, setName] = createSignal("");
+  const [status, setStatus] = createSignal("CONNECTING SERVER");
   const [unlisten, setUnlisten] = createSignal<UnlistenFn | undefined>(undefined)
 
   onMount(async () => {
@@ -18,7 +19,9 @@ function App() {
       console.log(event);
       const payload = event.payload as MyEvent;
       console.log(payload.name);
+      setStatus(payload.name);
     })
+    await invoke("get_latest_my_event"); // Previous might've been missed
     setUnlisten(() => unlisten_events);
   });
 
@@ -78,6 +81,9 @@ function App() {
       <button type="button" onClick={() => emit("event-name", { message: 'Tauri is awesome!' })}>
         Test button
       </button>
+      <div>
+        {status()}
+      </div>
     </div>
   );
 }
