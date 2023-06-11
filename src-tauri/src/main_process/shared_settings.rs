@@ -23,6 +23,7 @@ pub struct BrowserInfo{
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BrowserSettings{
     pub mouseSpeed: f64,
+    pub mouseAcceleration: bool,
     pub scrollSpeed: f64,
     pub scrollReversed: bool,
 }
@@ -45,6 +46,7 @@ lazy_static! {
     pub static ref BROWSER_SETTINGS: Arc<Mutex<BrowserSettings>> = Arc::new(Mutex::new(
         BrowserSettings {
             mouseSpeed: 1.00,
+            mouseAcceleration: true,
             scrollSpeed: 1.00,
             scrollReversed: false,
         }

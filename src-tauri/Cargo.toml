@@ -26,7 +26,7 @@ tokio-tungstenite = {version = "0.18.0", features = ["native-tls"] }
 futures-util = "0.3.27"
 futures = "0.3.28"
 copypasta = "0.8.2"
-tauri-plugin-positioner = "1.0"
+# tauri-plugin-positioner = "1.0"
 rand = "0.8"
 
 [features]

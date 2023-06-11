@@ -6,7 +6,7 @@ extern crate lazy_static;
 
 use serde::Serialize;
 use tauri::{App, Manager, AppHandle/* , CustomMenuItem, SystemTray, SystemTrayMenu */};
-use tauri_plugin_positioner::{WindowExt, Position};
+//use tauri_plugin_positioner::{WindowExt, Position};
 use std::sync::{mpsc::{channel}, Arc, Mutex};
 use rdev::{end_rdev};
 use rand::Rng;
@@ -121,8 +121,8 @@ fn setup(app: &App) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
         window.close_devtools();
     } */
 
-    let win = app.get_window("main").unwrap();
-    let _ = win.move_window(Position::BottomRight);
+    //let win = app.get_window("main").unwrap();
+    //let _ = win.move_window(Position::BottomRight);
     {
         let mut handle = APP_HANDLE.lock().unwrap();
         *handle = Some(app.handle());
@@ -203,7 +203,7 @@ fn main() {
     let tray = SystemTray::new().with_menu(tray_menu); */
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_positioner::init())
+        // .plugin(tauri_plugin_positioner::init())
         /* .system_tray(tray) */
         .setup(|app| setup(app))
         /* .manage(TauriState {

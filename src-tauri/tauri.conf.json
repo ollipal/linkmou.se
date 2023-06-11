@@ -44,11 +44,12 @@
     "windows": [
       {
         "fullscreen": false,
-        "resizable": false,
-        "title": "browserkvm",
-        "width": 600,
-        "height": 300,
-        "decorations": false
+        "resizable": true,
+        "title": "linkmou.se",
+        "width": 960,
+        "height": 540,
+        "decorations": true,
+        "center": true
       }
     ],
     "systemTray": {
