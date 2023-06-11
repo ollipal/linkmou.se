@@ -2,6 +2,7 @@ import { createSignal, onMount, onCleanup } from "solid-js";
 import { invoke } from "@tauri-apps/api/tauri";
 import { emit, listen, UnlistenFn } from '@tauri-apps/api/event'
 import { appWindow } from '@tauri-apps/api/window'
+import { writeText } from '@tauri-apps/api/clipboard';
 import "./App.css";
 
 interface MyEvent {
@@ -55,7 +56,7 @@ function App() {
       </div>
       <p>{`linkmou.se/${name()}`}</p>
       <button type="button" onClick={() => {
-        navigator.clipboard.writeText(`linkmou.se/${name()}`).then(
+        writeText(`linkmou.se/${name()}`).then(
           () => {
             /* clipboard successfully set */
           },

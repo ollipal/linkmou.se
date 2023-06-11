@@ -385,28 +385,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "browserkvm"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "copypasta",
- "futures",
- "futures-util",
- "lazy_static",
- "rand 0.8.5",
- "rdev",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-positioner",
- "tokio",
- "tokio-tungstenite",
- "tungstenite",
- "webrtc",
-]
-
-[[package]]
 name = "bstr"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2116,6 +2094,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f30344350a2a51da54c1d53be93fade8a237e545dbcc4bdbe635413f2117cab9"
 dependencies = [
  "safemem",
+]
+
+[[package]]
+name = "linkmouse"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "copypasta",
+ "futures",
+ "futures-util",
+ "lazy_static",
+ "rand 0.8.5",
+ "rdev",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-positioner",
+ "tokio",
+ "tokio-tungstenite",
+ "tungstenite",
+ "webrtc",
 ]
 
 [[package]]

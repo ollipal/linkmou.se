@@ -16,6 +16,11 @@
       "shell": {
         "all": false,
         "open": false
+      },
+      "clipboard": {
+        "all": false,
+        "writeText": true,
+        "readText": false
       }
     },
     "bundle": {
