@@ -7,7 +7,7 @@ extern crate lazy_static;
 use serde::Serialize;
 use tauri::{App, Manager, AppHandle/* , CustomMenuItem, SystemTray, SystemTrayMenu */};
 //use tauri_plugin_positioner::{WindowExt, Position};
-use std::sync::{mpsc::{channel}, Arc, Mutex};
+use std::{sync::{mpsc::{channel}, Arc, Mutex}, thread::JoinHandle};
 use rdev::{end_rdev};
 use rand::Rng;
 use rand::rngs::OsRng;
@@ -151,15 +151,8 @@ fn start_connection() {
     //let (send_stop_4, recv_stop_4) = channel();
     let (send_finished, recv_finished) = channel();
 
-    {
-        let mut stop_information = STOP_INFORMATION.lock().unwrap();
-        stop_information.send_stop_2 = Some(send_stop_2);
-        stop_information.send_stop_3 = Some(send_stop_3);
-        stop_information.recv_finished = Some(recv_finished);
-    }
 
-
-    let _main_handler = thread::spawn(move || {
+    let _main_handle = thread::spawn(move || {
         let random_id = RANDOM_ID.lock().unwrap().to_string();
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
@@ -175,7 +168,16 @@ fn start_connection() {
                     send_event_to_front_end,
                 ).await;
             });
+        println!("MAIN PROCESS FINISHED");
     });
+
+    {
+        let mut stop_information = STOP_INFORMATION.lock().unwrap();
+        stop_information.send_stop_2 = Some(send_stop_2);
+        stop_information.send_stop_3 = Some(send_stop_3);
+        stop_information.recv_finished = Some(recv_finished);
+    }
+    
 }
 
 fn stop_connection() {
@@ -190,7 +192,7 @@ fn stop_connection() {
     println!("Waiting for main_process to finish");
     let _res = stop_information.recv_finished.as_ref().unwrap().recv(); // result value does not matter here
     
-    end_rdev();
+    println!("...Finished");
 }
 
 fn main() {
@@ -223,7 +225,9 @@ fn main() {
                 /* if let Err(e) = send_stop_1.send(true) {
                     println!("Could not send stop 1 {}", e);
                 } */
+                println!("EXIT REQUESTED");
                 stop_connection();
+                end_rdev();
             }
             _ => {}
         });

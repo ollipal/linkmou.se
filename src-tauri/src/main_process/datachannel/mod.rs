@@ -560,15 +560,15 @@ where
     println!("Press ctrl-c to stop");
     let result = tokio::select! {
         _ = done_rx.recv() => {
-            println!("received done signal!");
+            println!("received done signal! 1");
             "DISCONNECT"
         }
         _ = done_rx2.recv() => {
-            println!("received done signal!");
+            println!("received done signal! 2");
             "DISCONNECT"
         }
         _ = b.recv() => {
-            println!("received done signal!");
+            println!("received done signal! 3");
             "DISCONNECT"
         }
         _ = tokio::signal::ctrl_c() => {
