@@ -492,26 +492,6 @@ fn handle_wheel(mut values: Split<&str>) {
 fn code_to_rdev_key(code: &str) -> Option<&Key>{
     let key = CODE_TO_RDEV_KEY.get(code);
     match key {
-        Some(Key::MetaRight) => {
-            let os_name = &DESKTOP_INFO.lock().unwrap().osName;
-            if os_name == "macos" {
-                println!("Keeping MetaRight as MetaRight");
-                Some(&Key::MetaRight)
-            } else {
-                println!("Converting MetaRight to MetaLeft");
-                Some(&Key::MetaLeft)
-            }
-        }
-        Some(Key::MetaLeft) => {
-            let os_name = &DESKTOP_INFO.lock().unwrap().osName;
-            if os_name == "macos" {
-                println!("Keeping MetaLeft as MetaLeft");
-                Some(&Key::MetaLeft)
-            } else {
-                println!("Converting MetaLeft to ControlLeft");
-                Some(&Key::ControlLeft)
-            }
-        }
         Some(key) => {
             Some(key)
         }
