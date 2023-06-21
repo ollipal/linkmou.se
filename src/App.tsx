@@ -35,7 +35,7 @@ function App() {
     <div class="container">
       <p>{`linkmou.se/${name()}`}</p>
       <button type="button" onClick={() => {
-        writeText(`linkmou.se/${name()}`).then(
+        writeText(`https://linkmou.se/${name()}`).then(
           () => {
             /* clipboard successfully set */
           },

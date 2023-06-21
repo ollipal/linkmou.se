@@ -27,3 +27,13 @@ Requires access to rdev-fast & linkmouse repo, contents = Read-only
 TODO: how to update????
 
 After cloning fresh repo: `git submodule update --init --recursive`
+
+## Icon
+
+Current icon from: https://icons8.com/icons/set/new-tab
+
+Downloaded to: `./app-icon.png`
+
+Generate new icons with: `npm run tauri icon`
+
+More info: https://tauri.app/v1/guides/features/icons/
