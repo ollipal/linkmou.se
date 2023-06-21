@@ -508,14 +508,6 @@ fn handle_keydown(mut values: Split<&str>) {
     let command = format!("key_down,{},{}", code, key);
     println!("{}", command);
 
-    // At least Windows fires extra ControlLeft with AltGr event
-    // https://bugzilla.mozilla.org/show_bug.cgi?id=900750
-    // If not this, @ would not work
-    if code == "AltRight" {
-        println!("RELEASING ControlLeft");
-        send(&EventType::KeyRelease(Key::ControlLeft));
-    }
-
     let key = code_to_rdev_key(code);
     match key {
         Some(key) => send(&EventType::KeyPress(*key)),
