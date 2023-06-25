@@ -774,6 +774,10 @@ pub async fn main_process<H>(
             handle_browserinfo(values);
         } else if &name == "browsersettings" {
             handle_browsersettings(values);
+        } else if &name == "controllingstarted" {
+            send_event_to_front_end("controllingstarted".to_string());
+        } else if &name == "controllingstopped" {
+            send_event_to_front_end("controllingstopped".to_string());
         } else {
             println!("Unknown event.name: {}", name);
         }
