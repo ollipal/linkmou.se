@@ -4,6 +4,7 @@ import { emit, listen, UnlistenFn } from '@tauri-apps/api/event'
 import { appWindow } from '@tauri-apps/api/window'
 import { writeText } from '@tauri-apps/api/clipboard';
 import "./App.css";
+import Pop from "./components/Pop";
 
 interface MyEvent {
   name: string,
@@ -33,7 +34,9 @@ function App() {
 
   return (
     <div class="container">
-      <p>{`linkmou.se/${name()}`}</p>
+      <Pop>
+        <p>{`linkmou.se/${name()}`}</p>
+      </Pop>
       <button type="button" onClick={() => {
         writeText(`https://linkmou.se/${name()}`).then(
           () => {
@@ -58,9 +61,9 @@ function App() {
       }}>
         Change link
       </button>
-      <button type="button" onClick={() => emit("event-name", { message: 'Tauri is awesome!' })}>
+      {/* <button type="button" onClick={() => emit("event-name", { message: 'Tauri is awesome!' })}>
         Test button
-      </button>
+      </button> */}
       <div>
         {status()}
       </div>

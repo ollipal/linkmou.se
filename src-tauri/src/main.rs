@@ -20,7 +20,7 @@ use crate::main_process::main_process;
 use std::{thread};
 
 const ID_SECTION_LEN: i32 = 6;
-const ID_SECTION_AMOUNT: i32 = 1; // 4;
+const ID_SECTION_AMOUNT: i32 = 4; // 4;
 
 fn random_lowercase_letter_or_digit() -> char {
     let mut rng = OsRng;
