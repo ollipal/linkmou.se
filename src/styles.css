@@ -12,6 +12,14 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
+  --main: #0aa8a7;
+  --main-dark: #059393;
+  --main-light: #19cbcb;
+  --main-shadow: #0aa8a83f;
+  --thumb-size: 1rem;
+  --button-height: 3.5rem;
+  --button-width: 17rem;
+  --light-grey: rgb(200, 200, 200);
 }
 
 .container {
@@ -69,10 +77,10 @@ button {
 }
 
 button:hover {
-  border-color: #396cd8;
+  border-color: var(--main);
 }
 button:active {
-  border-color: #396cd8;
+  border-color: var(--main);
   background-color: #e8e8e8;
 }
 

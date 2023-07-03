@@ -8,21 +8,24 @@
     outline: none;
     border-radius: 20px;
     padding: 0 16px;
-    background-color: hsl(200 98% 39%);
+    background-color: var(--main);
     color: white;
     font-size: 16px;
     line-height: 0;
-    transition: 250ms background-color;
+    transition: .2s ease-in-out;
+    border: none;
   }
   .popover__trigger:hover {
-    background-color: hsl(201 96% 32%);
+    background-color: var(--main-dark);
+    box-shadow: 0 0 0 5px var(--main-shadow);
   }
   /* .popover__trigger:focus-visible {
     outline: 2px solid hsl(200 98% 39%);
     outline-offset: 2px;
   } */
   .popover__trigger:active {
-    background-color: hsl(201 90% 27%);
+    background-color: var(--main-dark);
+    box-shadow: 0 0 0 5px var(--main-shadow);
   }
   .popover__content {
     z-index: 50;
