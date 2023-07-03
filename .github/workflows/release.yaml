@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [windows-latest] # macos-latest, ubuntu-18.04] # Do not upgrade Ubuntu if wanted to work on older versions
+        platform: [windows-latest, macos-latest, ubuntu-18.04] # Do not upgrade Ubuntu if wanted to work on older versions
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -34,14 +34,14 @@ jobs:
         run: npm install # change this to npm or pnpm depending on which one you use
       - name: install macOS Apple Silicon dependencies
         if: matrix.platform == 'macos-latest'
-        run: rustup target add aarch64-apple-darwin # change this to npm or pnpm depending on which one you use
+        run: rustup target add aarch64-apple-darwin
       - uses: tauri-apps/tauri-action@dev
         if: matrix.platform == 'macos-latest'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: app-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version
-          args: --target aarch64-apple-darwin # --target universal-apple-darwin, --target x86_64-apple-darwin
+          args: --target universal-apple-darwin # One of following: --target aarch64-apple-darwin, --target universal-apple-darwin, --target x86_64-apple-darwin
           releaseName: 'App v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
