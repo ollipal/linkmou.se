@@ -1,5 +1,7 @@
 mod datachannel;
 mod shared_settings;
+mod messages_to_fe;
+use messages_to_fe::{CONTROLLING_STARTED, CONTROLLING_STOPPED};
 use std::{sync::{Arc}, time::{UNIX_EPOCH, SystemTime, self}, str::Split, thread, collections::HashMap, panic};
 use lazy_static::__Deref;
 use crate::main_process::{datachannel::{process_datachannel_messages, MouseOffset, PostSleepData}, shared_settings::{BrowserInfo, BrowserSettings, BROWSER_INFO, BROWSER_SETTINGS, DESKTOP_INFO}};
@@ -775,9 +777,9 @@ pub async fn main_process<H>(
         } else if &name == "browsersettings" {
             handle_browsersettings(values);
         } else if &name == "controllingstarted" {
-            send_event_to_front_end("controllingstarted".to_string());
+            send_event_to_front_end(CONTROLLING_STARTED.to_string());
         } else if &name == "controllingstopped" {
-            send_event_to_front_end("controllingstopped".to_string());
+            send_event_to_front_end(CONTROLLING_STOPPED.to_string());
         } else {
             println!("Unknown event.name: {}", name);
         }

@@ -27,7 +27,7 @@ function Pop({children} : {children: JSXElement}) {
         <Popover.Content class="popover__content">
           <Popover.Arrow />
           <div class="popover__header">
-            <Popover.Title class="popover__title">Copied</Popover.Title>
+            <Popover.Title class="popover__title">Copied!</Popover.Title>
             {/* <Popover.CloseButton class="popover__close-button">
               <CrossIcon />
             </Popover.CloseButton> */}

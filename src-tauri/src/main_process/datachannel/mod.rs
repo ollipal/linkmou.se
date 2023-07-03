@@ -28,6 +28,8 @@ use copypasta::{ClipboardContext, ClipboardProvider};
 
 mod websocket;
 use crate::main_process::datachannel::websocket::{WebSocket, CLOSE, CLOSE_IMMEDIATE};
+
+use crate::main_process::messages_to_fe::{CONNECTING_SERVER, SERVER_CONNECTED_WAITING_USER, USER_CONNECTING, USER_CONNECTED, USER_DISCONNECTED};
 use crate::main_process::shared_settings::DESKTOP_INFO;
 
 //const URL: &str = "ws://localhost:3001";
@@ -148,13 +150,13 @@ pub async fn process_datachannel_messages<F, G, H>(
         let mut websocket = WebSocket::new(URL);
 
         println!("websocket: connecting...");
-        send_event_to_front_end("CONNECTING SERVER".to_string());
+        send_event_to_front_end(CONNECTING_SERVER.to_string());
         if let Err(_) = websocket.connect(format!("desktop_{}", random_id)).await {
             continue;
         };
         tries = 0;
         println!("websocket: ...connected");
-        send_event_to_front_end("SERVER CONNECTED, WAITING USER".to_string());
+        send_event_to_front_end(SERVER_CONNECTED_WAITING_USER.to_string());
 
         let on_ws_receive = move | msg: String | async move {
             println!("websocket: received: {}", msg);
@@ -200,7 +202,7 @@ pub async fn process_datachannel_messages<F, G, H>(
             
             if signaling_message.key == "RTCSessionDescription" {
                 println!("SDP");
-                send_event_to_front_end("USER CONNECTING".to_string());
+                send_event_to_front_end(USER_CONNECTING.to_string());
                 let sdp_str = &signaling_message.value;
 
                 let sdp = match serde_json::from_str::<RTCSessionDescription>(&sdp_str) {
@@ -457,7 +459,7 @@ where
         let d_label = d.label().to_owned();
         let d_id = d.id();
         println!("New DataChannel {d_label} {d_id}");
-        send_event_to_front_end("USER CONNECTED".to_string());
+        send_event_to_front_end(USER_CONNECTED.to_string());
 
         let done_tx2_clone = done_tx2.clone();
 
@@ -545,7 +547,7 @@ where
             d.on_close(Box::new(move || {
                 println!("DC CLOSE");
                 let _ = done_tx2_clone.try_send(());
-                send_event_to_front_end("USER DISCONNECTED".to_string());
+                send_event_to_front_end(USER_DISCONNECTED.to_string());
                 Box::pin(async{})
             }));
         })

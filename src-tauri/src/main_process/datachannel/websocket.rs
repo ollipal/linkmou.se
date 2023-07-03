@@ -14,6 +14,8 @@ use tungstenite::Error;
 use tungstenite::Message;
 use tokio::time::{sleep, Duration};
 
+use crate::main_process::messages_to_fe::SERVER_DISCONNECTED;
+
 pub struct WebSocket {
     write: Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>,
     read: Option<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>,
@@ -228,7 +230,7 @@ where
                 msg = read_message(&mut websocket) => {
                     if msg.disconnected {
                         println!("DISCONNECTEDDDDDDD");
-                        send_event_to_front_end("SERVER DISCONNECTED, CLICK RESTART CONNECTION".to_string());
+                        send_event_to_front_end(SERVER_DISCONNECTED.to_string());
                         wait(2 * WEBSOCKET_MESSAGE_CHECK_DELAY).await;
                     } else {
                         match msg.msg {

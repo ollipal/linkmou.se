@@ -17,10 +17,10 @@
   .popover__trigger:hover {
     background-color: hsl(201 96% 32%);
   }
-  .popover__trigger:focus-visible {
+  /* .popover__trigger:focus-visible {
     outline: 2px solid hsl(200 98% 39%);
     outline-offset: 2px;
-  }
+  } */
   .popover__trigger:active {
     background-color: hsl(201 90% 27%);
   }
@@ -37,6 +37,7 @@
   }
   .popover__content[data-expanded] {
     animation: contentShow 250ms ease-out;
+    outline: none;
   }
   .popover__header {
     display: flex;

@@ -16,8 +16,9 @@
 
 .container {
   margin: 0;
-  padding-top: 10vh;
+  height: 100vh;
   display: flex;
+  align-items: center;
   flex-direction: column;
   justify-content: center;
   text-align: center;
@@ -50,7 +51,7 @@ h1 {
 
 input,
 button {
-  border-radius: 8px;
+  border-radius: 80px;
   border: 1px solid transparent;
   padding: 0.6em 1.2em;
   font-size: 1em;
@@ -60,6 +61,7 @@ button {
   background-color: #ffffff;
   transition: border-color 0.25s;
   box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
+  margin-top: 1rem;
 }
 
 button {

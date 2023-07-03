@@ -3,8 +3,9 @@ import { invoke } from "@tauri-apps/api/tauri";
 import { emit, listen, UnlistenFn } from '@tauri-apps/api/event'
 import { appWindow } from '@tauri-apps/api/window'
 import { writeText } from '@tauri-apps/api/clipboard';
-import "./App.css";
+
 import Pop from "./components/Pop";
+import { CONNECTING_SERVER, CONTROLLING_STARTED, CONTROLLING_STOPPED, SERVER_CONNECTED_WAITING_USER, SERVER_DISCONNECTED, USER_CONNECTED, USER_CONNECTING } from "./MessagesToFe";
 
 interface MyEvent {
   name: string,
@@ -12,7 +13,7 @@ interface MyEvent {
 
 function App() {
   const [name, setName] = createSignal("");
-  const [status, setStatus] = createSignal("CONNECTING SERVER");
+  const [status, setStatus] = createSignal(CONNECTING_SERVER);
   const [unlisten, setUnlisten] = createSignal<UnlistenFn | undefined>(undefined)
 
   onMount(async () => {
@@ -34,37 +35,67 @@ function App() {
 
   return (
     <div class="container">
-      <Pop>
-        <p>{`linkmou.se/${name()}`}</p>
-      </Pop>
-      <button type="button" onClick={() => {
-        writeText(`https://linkmou.se/${name()}`).then(
-          () => {
-            /* clipboard successfully set */
-          },
-          () => {
-            console.log("Copy fail")
-          }
-        );
+      {[CONNECTING_SERVER, SERVER_CONNECTED_WAITING_USER, USER_CONNECTING].includes(status()) &&
+        <>
+          <div style={{
+            "margin": "0.5rem",
+          }}>
+            {"Share this link to give access to you mouse and keyboard"}
+          </div>
+          <Pop>
+            <p onClick={() => {
+            writeText(`https://linkmou.se/${name()}`).then(
+              () => {
+                /* clipboard successfully set */
+              },
+              () => {
+                console.log("Copy fail")
+              }
+            );
+          }}>{`linkmou.se/${name()}`}</p>
+          </Pop>
+          <button type="button" onClick={async () => {
+            await invoke("change_random_id");
+            setName(await invoke("get_random_id"));
+          }}>
+            Change link
+          </button>
+        </>
+      }
+
+      {[USER_CONNECTED, CONTROLLING_STARTED, CONTROLLING_STOPPED].includes(status()) &&
+        <>
+          <div style={{
+            "margin": "0.5rem",
+          }}>
+            {"User connected!"}
+          </div>
+          <div style={{
+            color: "grey",
+            "font-size": "12px",
+          }}>
+            {status() === CONTROLLING_STARTED
+            ? "Controlling"
+            : "Not controlling"
+            }
+          </div>
+        </>
+      }
+
+      {status() === SERVER_DISCONNECTED &&
+        <button type="button" onClick={async () => {
+          await invoke("restart_connection");
+          setName(await invoke("get_random_id"));
+        }}>
+          Server disconnected, restart connection
+        </button>
+      }
+
+      <div style={{
+        color: "grey",
+        "font-size": "10px",
+        "margin-top": "1rem",
       }}>
-        Copy link
-      </button>
-      <button type="button" onClick={async () => {
-        await invoke("restart_connection");
-        setName(await invoke("get_random_id"));
-      }}>
-        Restart connection
-      </button>
-      <button type="button" onClick={async () => {
-        await invoke("change_random_id");
-        setName(await invoke("get_random_id"));
-      }}>
-        Change link
-      </button>
-      {/* <button type="button" onClick={() => emit("event-name", { message: 'Tauri is awesome!' })}>
-        Test button
-      </button> */}
-      <div>
         {status()}
       </div>
     </div>
